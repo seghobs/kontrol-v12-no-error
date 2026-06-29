@@ -49,9 +49,6 @@ def create_app():
     def server_error(_error):
         return jsonify({"success": False, "message": "Sunucu hatasi"}), 500
 
-    @app.context_processor
-    def inject_settings():
-        from app_core.storage import get_design_settings
-        return dict(design_settings=get_design_settings())
+
 
     return app

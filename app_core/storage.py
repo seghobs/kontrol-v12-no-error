@@ -548,40 +548,7 @@ def set_global_automation_settings(data):
         conn.close()
 
 
-def get_design_settings():
-    conn = _connect()
-    try:
-        row = conn.execute("SELECT value FROM key_value WHERE key='design_settings'").fetchone()
-        if row:
-            import json
-            return json.loads(row['value'])
-        return {
-            'liquid_glass': False,
-            'swipe_nav': False,
-            'glassmorphism': False,
-            'ambient_glow': False,
-            'animations': False,
-            'oled_mode': False
-        }
-    finally:
-        conn.close()
 
-def set_design_settings(data):
-    conn = _connect()
-    try:
-        import json
-        val = json.dumps(data)
-        conn.execute(
-            "INSERT OR REPLACE INTO key_value (key, value) VALUES ('design_settings', ?)",
-            (val,),
-        )
-        conn.commit()
-        return True
-    except Exception as error:
-        logger.error("Design settings yazma hatasi: %s", error)
-        return False
-    finally:
-        conn.close()
 
 
 def get_selected_post_for_group(thread_id, date_str):

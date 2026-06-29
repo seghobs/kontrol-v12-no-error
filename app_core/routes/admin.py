@@ -921,19 +921,3 @@ def save_global_automation_settings_route():
     return api_response(True, "OK", "Global otomasyon ayarlari kaydedildi.")
 
 
-@admin_bp.route('/get_design_settings', methods=['GET'])
-def get_design_settings_route():
-    auth_error = _require_admin()
-    if auth_error: return auth_error
-    from app_core.storage import get_design_settings
-    return api_response(True, "OK", get_design_settings())
-
-@admin_bp.route('/set_design_settings', methods=['POST'])
-def set_design_settings_route():
-    auth_error = _require_admin()
-    if auth_error: return auth_error
-    from app_core.storage import set_design_settings
-    data = request.json or {}
-    success = set_design_settings(data)
-    return api_response(True, "OK", {'success': success})
-
