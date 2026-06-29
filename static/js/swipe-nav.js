@@ -1,10 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- GLOBAL DESIGN SETTINGS MANAGER ---
     // Fallback if not defined
-    let settings = { liquid_glass: true, swipe_nav: true };
+    let settings = { liquid_glass: false, swipe_nav: false, glassmorphism: false, ambient_glow: false, animations: false, oled_mode: false };
     const metaTag = document.getElementById('design-settings-meta');
     if (metaTag) {
-        try { settings = JSON.parse(metaTag.content); } catch (e) {}
+        try { 
+            const parsed = JSON.parse(metaTag.content);
+            settings = Object.assign(settings, parsed);
+        } catch (e) {}
     }
     window.GLOBAL_DESIGN_SETTINGS = settings;
 

@@ -556,8 +556,12 @@ def get_design_settings():
             import json
             return json.loads(row['value'])
         return {
-            'liquid_glass': True,
-            'swipe_nav': True
+            'liquid_glass': False,
+            'swipe_nav': False,
+            'glassmorphism': False,
+            'ambient_glow': False,
+            'animations': False,
+            'oled_mode': False
         }
     finally:
         conn.close()

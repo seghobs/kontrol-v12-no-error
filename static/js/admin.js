@@ -1659,27 +1659,30 @@ function toggleOledMode(enabled) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    let settings = { liquid_glass: true, swipe_nav: true, glassmorphism: true, ambient_glow: true, animations: true, oled_mode: false };
+    let settings = { liquid_glass: false, swipe_nav: false, glassmorphism: false, ambient_glow: false, animations: false, oled_mode: false };
     const metaTag = document.getElementById('design-settings-meta');
     if (metaTag) {
-        try { settings = JSON.parse(metaTag.content); } catch (e) {}
+        try { 
+            const parsed = JSON.parse(metaTag.content);
+            settings = Object.assign(settings, parsed);
+        } catch (e) {}
     }
     window.GLOBAL_DESIGN_SETTINGS = settings;
     
     const glassToggle = document.getElementById('liquidGlassToggle');
-    if (glassToggle) glassToggle.checked = settings.liquid_glass !== false;
+    if (glassToggle) glassToggle.checked = settings.liquid_glass === true;
     
     const swipeToggle = document.getElementById('swipeNavToggle');
-    if (swipeToggle) swipeToggle.checked = settings.swipe_nav !== false;
+    if (swipeToggle) swipeToggle.checked = settings.swipe_nav === true;
 
     const glassmorphismToggle = document.getElementById('glassmorphismToggle');
-    if (glassmorphismToggle) glassmorphismToggle.checked = settings.glassmorphism !== false;
+    if (glassmorphismToggle) glassmorphismToggle.checked = settings.glassmorphism === true;
 
     const ambientGlowToggle = document.getElementById('ambientGlowToggle');
-    if (ambientGlowToggle) ambientGlowToggle.checked = settings.ambient_glow !== false;
+    if (ambientGlowToggle) ambientGlowToggle.checked = settings.ambient_glow === true;
 
     const animationsToggle = document.getElementById('animationsToggle');
-    if (animationsToggle) animationsToggle.checked = settings.animations !== false;
+    if (animationsToggle) animationsToggle.checked = settings.animations === true;
 
     const oledModeToggle = document.getElementById('oledModeToggle');
     if (oledModeToggle) oledModeToggle.checked = settings.oled_mode === true;
