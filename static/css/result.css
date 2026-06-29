@@ -794,75 +794,7 @@ body.is-dragging .sortable-main-card {
     transition: transform 0.3s ease;
 }
 
-/* Mobile Bottom Navigation - Ultra Chic Dynamic Island */
-.mobile-bottom-nav {
-    position: fixed;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 100%;
-    max-width: 100%;
-    height: calc(72px + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: rgba(26, 18, 14, 0.55);
-    backdrop-filter: blur(32px) saturate(180%);
-    -webkit-backdrop-filter: blur(32px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 24px 24px 0 0;
-    display: none;
-    justify-content: space-evenly;
-    align-items: center;
-    z-index: 9999;
-    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(196, 149, 106, 0.05) inset;
-    padding-left: 8px; padding-right: 8px;
-}
 
-.nav-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    color: rgba(255, 255, 255, 0.5);
-    width: 72px;
-    height: 56px;
-    transition: all 0.2s ease;
-    gap: 4px;
-}
-
-.nav-item i {
-    font-size: 20px;
-    transition: all 0.2s ease;
-}
-
-.nav-item span {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    transition: all 0.2s ease;
-}
-
-.nav-item:hover {
-    color: #d4a574;
-}
-
-.nav-item:hover i {
-    color: #d4a574;
-}
-
-.nav-item.active {
-    color: #d4a574;
-}
-
-.nav-item.active i {
-    color: #d4a574;
-    text-shadow: 0 4px 12px rgba(212, 165, 116, 0.4);
-}
-
-@media (max-width: 991px) {
-    .mobile-bottom-nav {
-        display: flex;
-    }
     body {
         padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px)) !important; /* Space for bottom nav */
     }
