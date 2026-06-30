@@ -1690,7 +1690,7 @@ async function showUserSpamDetails(username) {
     const threadId = select.value;
     titleUser.textContent = username;
     commentsList.innerHTML = `<div style="text-align: center; padding: 20px; color: #aaa;"><i class="fas fa-spinner fa-spin"></i> Yorumlar yükleniyor...</div>`;
-    modal.style.display = "flex";
+    modal.classList.add("show");
     
     try {
         const response = await fetch(`/admin/user_comments/${threadId}/${username}`);
@@ -1747,7 +1747,7 @@ window.showUserSpamDetails = showUserSpamDetails;
 
 function closeUserSpamModal() {
     const modal = document.getElementById("userSpamDetailsModal");
-    if (modal) modal.style.display = "none";
+    if (modal) modal.classList.remove("show");
 }
 window.closeUserSpamModal = closeUserSpamModal;
 
