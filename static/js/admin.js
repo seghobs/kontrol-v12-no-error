@@ -1573,4 +1573,183 @@ async function handleImportJson(event) {
 window.handleImportJson = handleImportJson;
 
 
+// ── Yorum Spam & Puanlama Raporu İşlevleri ──
+function toggleSpamReportPanel() {
+    const body = document.getElementById("spamReportBody");
+    const chevron = document.getElementById("spamReportChevron");
+    if (!body || !chevron) return;
+    
+    if (body.classList.contains("collapsed")) {
+        slideDown(body);
+        chevron.classList.add("rotated");
+        populateSpamReportGroupsDropdown();
+    } else {
+        slideUp(body);
+        chevron.classList.remove("rotated");
+    }
+}
+window.toggleSpamReportPanel = toggleSpamReportPanel;
+
+async function populateSpamReportGroupsDropdown() {
+    const select = document.getElementById("spamReportGroupSelect");
+    if (!select) return;
+    
+    // Clear existing options except default
+    select.innerHTML = '<option value="">Grup Seçin...</option>';
+    
+    try {
+        const response = await fetch("/admin/get_groups");
+        const data = await response.json();
+        if (data.success && data.groups) {
+            data.groups.forEach(g => {
+                const opt = document.createElement("option");
+                opt.value = g.id;
+                opt.textContent = g.name || 'İsimsiz Grup';
+                select.appendChild(opt);
+            });
+        }
+    } catch (e) {
+        console.error("Grup listesi getirme hatası:", e);
+    }
+}
+window.populateSpamReportGroupsDropdown = populateSpamReportGroupsDropdown;
+
+async function loadGroupSpamReport() {
+    const select = document.getElementById("spamReportGroupSelect");
+    const loading = document.getElementById("spamReportLoading");
+    const wrapper = document.getElementById("spamReportTableWrapper");
+    const tbody = document.getElementById("spamReportTableBody");
+    const emptyMsg = document.getElementById("spamReportEmptyMsg");
+    
+    if (!select || !loading || !wrapper || !tbody || !emptyMsg) return;
+    
+    const threadId = select.value;
+    if (!threadId) {
+        wrapper.style.display = "none";
+        emptyMsg.style.display = "none";
+        return;
+    }
+    
+    loading.style.display = "block";
+    wrapper.style.display = "none";
+    emptyMsg.style.display = "none";
+    tbody.innerHTML = "";
+    
+    try {
+        const response = await fetch(`/admin/spam_report/${threadId}`);
+        const data = await response.json();
+        loading.style.display = "none";
+        
+        if (data.success && data.report && data.report.length > 0) {
+            data.report.forEach(row => {
+                const score = parseFloat(row.average_spam_score || 0).toFixed(1);
+                
+                // Determine badge style based on spam score
+                let scoreBadge = '';
+                if (score <= 30) {
+                    scoreBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; padding: 4px 10px; border-radius: 8px;">${score} (Temiz)</span>`;
+                } else if (score <= 65) {
+                    scoreBadge = `<span class="badge" style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; padding: 4px 10px; border-radius: 8px;">${score} (Şüpheli)</span>`;
+                } else {
+                    scoreBadge = `<span class="badge" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; padding: 4px 10px; border-radius: 8px;">${score} (Yüksek Spam)</span>`;
+                }
+                
+                const tr = document.createElement("tr");
+                tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+                tr.innerHTML = `
+                    <td style="padding: 12px 16px; text-align: left; vertical-align: middle;">
+                        <a href="javascript:void(0)" onclick="showUserSpamDetails('${row.username}')" style="color: var(--accent-primary); font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-user-circle"></i> @${row.username}
+                        </a>
+                    </td>
+                    <td style="padding: 12px 16px; text-align: center; vertical-align: middle;">${row.total_comments}</td>
+                    <td style="padding: 12px 16px; text-align: center; vertical-align: middle; color: ${row.format_errors > 0 ? '#f87171' : 'rgba(255,255,255,0.7)'};">${row.format_errors}</td>
+                    <td style="padding: 12px 16px; text-align: center; vertical-align: middle;">${scoreBadge}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            wrapper.style.display = "block";
+        } else {
+            emptyMsg.style.display = "block";
+        }
+    } catch (e) {
+        loading.style.display = "none";
+        showAlert("Rapor yüklenemedi: " + e.message, "error");
+    }
+}
+window.loadGroupSpamReport = loadGroupSpamReport;
+
+async function showUserSpamDetails(username) {
+    const select = document.getElementById("spamReportGroupSelect");
+    const modal = document.getElementById("userSpamDetailsModal");
+    const titleUser = document.getElementById("spamModalUsername");
+    const commentsList = document.getElementById("spamModalCommentsList");
+    
+    if (!select || !modal || !titleUser || !commentsList) return;
+    
+    const threadId = select.value;
+    titleUser.textContent = username;
+    commentsList.innerHTML = `<div style="text-align: center; padding: 20px; color: #aaa;"><i class="fas fa-spinner fa-spin"></i> Yorumlar yükleniyor...</div>`;
+    modal.style.display = "flex";
+    
+    try {
+        const response = await fetch(`/admin/user_comments/${threadId}/${username}`);
+        const data = await response.json();
+        
+        if (data.success && data.comments && data.comments.length > 0) {
+            commentsList.innerHTML = "";
+            data.comments.forEach(c => {
+                const isFormatValid = c.is_format_valid === 1;
+                const formatBadge = isFormatValid 
+                    ? `<span class="badge" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; font-size: 11px; padding: 2px 6px; border-radius: 6px;">Kural Geçti</span>`
+                    : `<span class="badge" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; font-size: 11px; padding: 2px 6px; border-radius: 6px;">Kural İhlali</span>`;
+                
+                const score = parseFloat(c.spam_score || 0).toFixed(1);
+                let scoreText = '';
+                if (score <= 30) scoreText = `<span style="color: #34d399; font-weight:600;">${score}</span>`;
+                else if (score <= 65) scoreText = `<span style="color: #fbbf24; font-weight:600;">${score}</span>`;
+                else scoreText = `<span style="color: #f87171; font-weight:600;">${score}</span>`;
+
+                const commentCard = document.createElement("div");
+                commentCard.style.background = "rgba(255, 255, 255, 0.02)";
+                commentCard.style.border = "1px solid rgba(255, 255, 255, 0.05)";
+                commentCard.style.borderRadius = "12px";
+                commentCard.style.padding = "14px";
+                commentCard.style.marginBottom = "12px";
+                
+                commentCard.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; color: #aaa;">
+                        <div>
+                            <i class="fas fa-link me-1"></i> <a href="https://instagram.com/p/${c.post_code}" target="_blank" style="color: var(--accent-primary); text-decoration: none; font-weight: 600;">Post: ${c.post_code}</a>
+                        </div>
+                        <div>
+                            <i class="fas fa-calendar-alt me-1"></i> ${c.created_at}
+                        </div>
+                    </div>
+                    <div style="color: #fff; font-size: 13px; background: rgba(0,0,0,0.2); padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; word-break: break-word; font-style: italic;">
+                        "${escapeHtml(c.comment_text)}"
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
+                        <div>${formatBadge}</div>
+                        <div style="color: rgba(255,255,255,0.8);">Spam Puanı: ${scoreText} / 100</div>
+                    </div>
+                `;
+                commentsList.appendChild(commentCard);
+            });
+        } else {
+            commentsList.innerHTML = `<div style="text-align: center; padding: 20px; color: #aaa;">Yorum detay verisi bulunamadı.</div>`;
+        }
+    } catch (e) {
+        commentsList.innerHTML = `<div style="text-align: center; padding: 20px; color: #f87171;"><i class="fas fa-exclamation-triangle"></i> Yorumlar yüklenemedi: ${e.message}</div>`;
+    }
+}
+window.showUserSpamDetails = showUserSpamDetails;
+
+function closeUserSpamModal() {
+    const modal = document.getElementById("userSpamDetailsModal");
+    if (modal) modal.style.display = "none";
+}
+window.closeUserSpamModal = closeUserSpamModal;
+
+
 

@@ -83,6 +83,21 @@ def _init_db(conn):
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS comment_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            thread_id TEXT,
+            username TEXT,
+            post_code TEXT,
+            comment_text TEXT,
+            spam_score REAL,
+            is_format_valid INTEGER,
+            created_at TEXT NOT NULL,
+            UNIQUE(thread_id, username, post_code)
+        )
+        """
+    )
 
     try:
         conn.execute("ALTER TABLE tokens ADD COLUMN deleted_at TEXT DEFAULT ''")
@@ -612,6 +627,93 @@ def set_cached_run_result(thread_id, date_str, result_data):
     except Exception as error:
         logger.error("set_cached_run_result hatasi: %s", error)
         return False
+    finally:
+        conn.close()
+
+
+def save_comment_log(thread_id, username, post_code, comment_text, spam_score, is_format_valid):
+    conn = _connect()
+    try:
+        now_str = datetime.now(GMT3).strftime("%Y-%m-%d %H:%M:%S")
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO comment_history 
+            (thread_id, username, post_code, comment_text, spam_score, is_format_valid, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (thread_id, username, post_code, comment_text, spam_score, is_format_valid, now_str)
+        )
+        conn.commit()
+        return True
+    except Exception as error:
+        logger.error("save_comment_log hatasi: %s", error)
+        return False
+    finally:
+        conn.close()
+
+
+def get_group_spam_report(thread_id):
+    conn = _connect()
+    try:
+        cursor = conn.execute(
+            """
+            SELECT 
+                username,
+                COUNT(id) AS total_comments,
+                AVG(spam_score) AS average_spam_score,
+                SUM(CASE WHEN is_format_valid = 0 THEN 1 ELSE 0 END) AS format_errors
+            FROM comment_history
+            WHERE thread_id = ?
+            GROUP BY username
+            ORDER BY average_spam_score DESC
+            """,
+            (thread_id,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+    except Exception as error:
+        logger.error("get_group_spam_report hatasi: %s", error)
+        return []
+    finally:
+        conn.close()
+
+
+def get_user_comment_details(thread_id, username):
+    conn = _connect()
+    try:
+        cursor = conn.execute(
+            """
+            SELECT post_code, comment_text, spam_score, is_format_valid, created_at
+            FROM comment_history
+            WHERE thread_id = ? AND username = ?
+            ORDER BY created_at DESC
+            """,
+            (thread_id, username)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+    except Exception as error:
+        logger.error("get_user_comment_details hatasi: %s", error)
+        return []
+    finally:
+        conn.close()
+
+
+def get_user_recent_comments(username, limit=5):
+    conn = _connect()
+    try:
+        cursor = conn.execute(
+            """
+            SELECT comment_text
+            FROM comment_history
+            WHERE username = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (username, limit)
+        )
+        return [row["comment_text"] for row in cursor.fetchall()]
+    except Exception as error:
+        logger.error("get_user_recent_comments hatasi: %s", error)
+        return []
     finally:
         conn.close()
 

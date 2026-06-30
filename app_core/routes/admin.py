@@ -921,3 +921,21 @@ def save_global_automation_settings_route():
     return api_response(True, "OK", "Global otomasyon ayarlari kaydedildi.")
 
 
+@admin_bp.route("/spam_report/<thread_id>", methods=["GET"])
+def get_spam_report_route(thread_id):
+    auth_error = _require_admin()
+    if auth_error: return auth_error
+    from app_core.storage import get_group_spam_report
+    report = get_group_spam_report(thread_id)
+    return api_response(True, "OK", "Spam raporu", extra={"report": report})
+
+
+@admin_bp.route("/user_comments/<thread_id>/<username>", methods=["GET"])
+def get_user_comments_route(thread_id, username):
+    auth_error = _require_admin()
+    if auth_error: return auth_error
+    from app_core.storage import get_user_comment_details
+    comments = get_user_comment_details(thread_id, username)
+    return api_response(True, "OK", "Kullanici yorum detaylari", extra={"comments": comments})
+
+

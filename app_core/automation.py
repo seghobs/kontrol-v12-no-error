@@ -170,7 +170,7 @@ def _normalize(u):
 
 
 def _fetch_comment_details(media_id, token_record):
-    """Yorumları çeker ve (kullanıcı seti, yorum_sayısı, yorumlar_acik_mi) döndürür."""
+    """Yorumları çeker ve (kullanıcı seti, yorum_sayısı, yorumlar_acik_mi, yorum_listesi) döndürür."""
     token = token_record.get("token", "")
     user_agent = token_record.get("user_agent", "")
     android_id = token_record.get("android_id_yeni", "")
@@ -189,6 +189,7 @@ def _fetch_comment_details(media_id, token_record):
         comments_disabled = False
         comment_count = 0
         users = set()
+        comments_list = []
 
         if resp.status_code == 200:
             for line in resp.text.splitlines():
@@ -201,18 +202,20 @@ def _fetch_comment_details(media_id, token_record):
                         
                     for comment in json_data.get("comments", []):
                         u = comment.get("user", {}).get("username")
+                        t = comment.get("text", "")
                         if u:
                             users.add(u.lower())
+                            comments_list.append((u.lower(), t))
                 except json.JSONDecodeError:
                     continue
 
         if comments_disabled:
-            return set(), 0, False
+            return set(), 0, False, []
 
-        return users, comment_count, True  # (yorumcular, sayi, acik_mi)
+        return users, comment_count, True, comments_list  # (yorumcular, sayi, acik_mi, yorumlar)
     except Exception as e:
         logger.warning("Yorum detay cekme hatasi media=%s: %s", media_id, e)
-        return set(), 0, False
+        return set(), 0, False, []
 
 
 def run_automation_for_thread(thread_id, test_mode=False):
@@ -261,13 +264,14 @@ def run_automation_for_thread(thread_id, test_mode=False):
     MIN_COMMENT_COUNT = 2
     hedef_post = None
     hedef_commenters = set()
-
+    hedef_comments_list = []
+    
     for post in posts:
         media_id = post.get("id")
         if not media_id:
             continue
-
-        commenters, comment_count, comments_open = _fetch_comment_details(media_id, token_record)
+            
+        commenters, comment_count, comments_open, comments_list = _fetch_comment_details(media_id, token_record)
         time.sleep(1)  # rate limit
 
         logger.info(
@@ -289,6 +293,7 @@ def run_automation_for_thread(thread_id, test_mode=False):
         # İlk uygun postu seç
         hedef_post = post
         hedef_commenters = commenters
+        hedef_comments_list = comments_list
         break
 
     if not hedef_post:
@@ -302,6 +307,24 @@ def run_automation_for_thread(thread_id, test_mode=False):
         "Otomasyon: Hedef post secildi: %s (yorum yapanlar: %d kisi)",
         hedef_post.get("code"), len(hedef_commenters)
     )
+
+    # 3.5. Yorumları analiz et ve veritabanına kaydet
+    try:
+        from app_core.nlp_scorer import calculate_comment_spam_score
+        from app_core.storage import save_comment_log
+        from app_core.routes.main import has_emoji, clean_word_count
+        
+        post_code = hedef_post.get("code")
+        for u, text in hedef_comments_list:
+            u_norm = u.lower().strip()
+            # Yalnızca grup üyelerinin yorumlarını kaydet
+            if u_norm in member_usernames:
+                is_valid = 1 if (has_emoji(text) and clean_word_count(text) >= 2) else 0
+                spam_score = calculate_comment_spam_score(u_norm, text)
+                save_comment_log(thread_id, u_norm, post_code, text, spam_score, is_valid)
+        logger.info("Otomasyon yorum analiz kayıtları başarıyla tamamlandı.")
+    except Exception as spam_log_err:
+        logger.error("Otomasyon yorum analiz kayit hatasi: %s", spam_log_err)
 
     # Otomasyonun seçtiği postu veritabanına kaydet (grup seçildiğinde gelmesi için)
     try:

@@ -257,7 +257,52 @@
             </div>
         </div>
 
+        <div class="spam-report-section" id="spamReportSection">
+            <div class="section-header" id="spamReportHeader" onclick="toggleSpamReportPanel()" style="cursor: pointer;">
+                <h2><i class="fas fa-chart-line"></i> Yorum Spam & Puanlama Raporu</h2>
+                <i class="fas fa-chevron-down chevron-icon" id="spamReportChevron"></i>
+            </div>
+            <div id="spamReportBody" class="section-body collapsed" onclick="event.stopPropagation()">
+                <p style="color: var(--text-secondary); margin-bottom: 15px; font-size: 14px;">
+                    <i class="fas fa-info-circle"></i> Bu alan, kontrol edilen paylaşımlarda gruptaki üyelerin yaptıkları yorumların spam/bot puanlarını analiz eder. Üyelerin detaylarını görmek için isimlerine tıklayabilirsiniz.
+                </p>
 
+                <!-- Group Selector for Spam Report -->
+                <div style="margin-bottom: 20px;">
+                    <label style="color:rgba(255,255,255,0.8); font-size:13px; display:block; margin-bottom:8px;"><i class="fas fa-users me-1"></i> Raporu Görüntülenecek Grubu Seçin:</label>
+                    <select id="spamReportGroupSelect" onchange="loadGroupSpamReport()" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:10px 14px; border-radius:12px; width:100%; max-width: 400px; outline: none; cursor: pointer;">
+                        <option value="">Grup Seçin...</option>
+                    </select>
+                </div>
+
+                <div class="loading" id="spamReportLoading" style="display: none;">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p style="margin-top: 5px;">Rapor hazırlanıyor, lütfen bekleyin...</p>
+                </div>
+
+                <!-- Spam Scoring Table -->
+                <div class="table-responsive" id="spamReportTableWrapper" style="display: none; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.15);">
+                    <table class="table" style="color: #fff; margin-bottom: 0; font-size: 14px; width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: rgba(255, 255, 255, 0.05); border-bottom: 1px solid rgba(255,255,255,0.08);">
+                                <th style="padding: 14px 16px; text-align: left; font-weight: 600; color: var(--accent-primary);">Kullanıcı Adı</th>
+                                <th style="padding: 14px 16px; text-align: center; font-weight: 600; color: var(--accent-primary);">Toplam Yorum</th>
+                                <th style="padding: 14px 16px; text-align: center; font-weight: 600; color: var(--accent-primary);">Format İhlali</th>
+                                <th style="padding: 14px 16px; text-align: center; font-weight: 600; color: var(--accent-primary);">Ort. Spam Puanı</th>
+                            </tr>
+                        </thead>
+                        <tbody id="spamReportTableBody">
+                            <!-- Veriler buraya yüklenecek -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="spamReportEmptyMsg" style="color: var(--text-secondary); text-align: center; padding: 30px; display: none;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 10px; color: var(--accent-primary);"></i>
+                    <p>Bu grup için henüz kaydedilmiş yorum verisi bulunmamaktadır.</p>
+                </div>
+            </div>
+        </div>
 
         <div class="audit-section" id="auditSection" onclick="toggleAuditPanel()" style="cursor: pointer;">
             <div class="section-header" id="auditHeader">
@@ -383,7 +428,19 @@
         </div>
     </div>
     
-
+    <!-- User Spam Comment Details Modal -->
+    <div id="userSpamDetailsModal" class="modal" onclick="if (event.target.id === 'userSpamDetailsModal') closeUserSpamModal();">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2 style="color: #fff;"><i class="fas fa-chart-bar"></i> Yorum Detayları: @<span id="spamModalUsername"></span></h2>
+                <button type="button" class="modal-close" onclick="closeUserSpamModal()">×</button>
+            </div>
+            <div style="max-height: 400px; overflow-y: auto; margin-top: 15px;" id="spamModalCommentsList">
+                <!-- Yorum detayları buraya yüklenecek -->
+            </div>
+        </div>
+    </div>
+    
     <!-- Mobile Bottom Navigation -->
     <nav class="mobile-bottom-nav">
         <a href="/" class="nav-item">

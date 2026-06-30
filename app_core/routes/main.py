@@ -220,12 +220,24 @@ def index():
             else:
                 comments_list = all_result if isinstance(all_result, list) else all_result.get("comments", [])
                 commenters_normalized = set()
+                from app_core.nlp_scorer import calculate_comment_spam_score
+                from app_core.storage import save_comment_log
+                import re
+                
+                match = re.search(r"https://www\.instagram\.com/(?:p|reel)/([^/]+)/?", link_single)
+                post_code = match.group(1) if match else "unknown"
+                
                 for uname, text in comments_list:
                     norm_uname = normalize_username(uname)
                     commenters_normalized.add(norm_uname)
                     if norm_uname not in user_comments_map:
                         user_comments_map[norm_uname] = []
                     user_comments_map[norm_uname].append(text)
+                    
+                    if norm_uname in grup_uye_kullanicilar and thread_id:
+                        is_valid = 1 if (has_emoji(text) and clean_word_count(text) >= 2) else 0
+                        spam_score = calculate_comment_spam_score(norm_uname, text)
+                        save_comment_log(thread_id, norm_uname, post_code, text, spam_score, is_valid)
             
             all_commented.update(commenters_normalized)
             
