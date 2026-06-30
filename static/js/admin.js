@@ -1590,22 +1590,96 @@ function toggleSpamReportPanel() {
 }
 window.toggleSpamReportPanel = toggleSpamReportPanel;
 
-async function populateSpamReportGroupsDropdown() {
-    const select = document.getElementById("spamReportGroupSelect");
-    if (!select) return;
+function toggleSpamDropdown() {
+    const menu = document.getElementById("spamReportDropdownMenu");
+    const trigger = document.getElementById("spamReportDropdownTrigger");
+    if (menu && trigger) {
+        menu.classList.toggle("show");
+        trigger.classList.toggle("active");
+    }
+}
+window.toggleSpamDropdown = toggleSpamDropdown;
+
+function filterSpamDropdown(val) {
+    const query = val.toLowerCase().trim();
+    const options = document.querySelectorAll("#spamReportGroupDropdownOptions .dropdown-option");
+    options.forEach(opt => {
+        const text = opt.textContent.toLowerCase();
+        if (text.includes(query)) {
+            opt.style.display = "flex";
+        } else {
+            opt.style.display = "none";
+        }
+    });
+}
+window.filterSpamDropdown = filterSpamDropdown;
+
+function selectSpamGroup(id, name) {
+    const input = document.getElementById("spamReportGroupSelect");
+    const textSpan = document.getElementById("spamReportGroupDropdownText");
+    const menu = document.getElementById("spamReportDropdownMenu");
+    const trigger = document.getElementById("spamReportDropdownTrigger");
     
-    // Clear existing options except default
-    select.innerHTML = '<option value="">Grup Seçin...</option>';
+    if (input && textSpan && menu && trigger) {
+        input.value = id;
+        textSpan.textContent = name;
+        
+        // Highlight selected
+        const options = document.querySelectorAll("#spamReportGroupDropdownOptions .dropdown-option");
+        options.forEach(opt => {
+            if (opt.getAttribute("data-id") === id) {
+                opt.classList.add("selected");
+            } else {
+                opt.classList.remove("selected");
+            }
+        });
+        
+        menu.classList.remove("show");
+        trigger.classList.remove("active");
+        
+        // Trigger onchange event
+        input.dispatchEvent(new Event("change"));
+    }
+}
+window.selectSpamGroup = selectSpamGroup;
+
+// Close dropdown on click outside
+document.addEventListener("click", (e) => {
+    const dropdown = document.getElementById("spamReportGroupDropdown");
+    if (dropdown && !dropdown.contains(e.target)) {
+        const menu = document.getElementById("spamReportDropdownMenu");
+        const trigger = document.getElementById("spamReportDropdownTrigger");
+        if (menu) menu.classList.remove("show");
+        if (trigger) trigger.classList.remove("active");
+    }
+});
+
+async function populateSpamReportGroupsDropdown() {
+    const container = document.getElementById("spamReportGroupDropdownOptions");
+    const select = document.getElementById("spamReportGroupSelect");
+    const textSpan = document.getElementById("spamReportGroupDropdownText");
+    if (!container || !select || !textSpan) return;
+    
+    container.innerHTML = "";
     
     try {
         const response = await fetch("/admin/get_groups");
         const data = await response.json();
         if (data.success && data.groups) {
             data.groups.forEach(g => {
-                const opt = document.createElement("option");
-                opt.value = g.id;
-                opt.textContent = g.name || 'İsimsiz Grup';
-                select.appendChild(opt);
+                const div = document.createElement("div");
+                div.className = "dropdown-option";
+                div.setAttribute("data-id", g.id);
+                div.textContent = g.name || 'İsimsiz Grup';
+                
+                // Add select styling if this is the active value
+                if (select.value === g.id) {
+                    div.classList.add("selected");
+                    textSpan.textContent = g.name || 'İsimsiz Grup';
+                }
+                
+                div.onclick = () => selectSpamGroup(g.id, g.name || 'İsimsiz Grup');
+                container.appendChild(div);
             });
         }
     } catch (e) {

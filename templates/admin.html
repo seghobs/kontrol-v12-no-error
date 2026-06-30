@@ -268,11 +268,22 @@
                 </p>
 
                 <!-- Group Selector for Spam Report -->
-                <div style="margin-bottom: 20px;">
+                <div style="margin-bottom: 20px; position: relative; z-index: 10060;">
                     <label style="color:rgba(255,255,255,0.8); font-size:13px; display:block; margin-bottom:8px;"><i class="fas fa-users me-1"></i> Raporu Görüntülenecek Grubu Seçin:</label>
-                    <select id="spamReportGroupSelect" onchange="loadGroupSpamReport()" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:10px 14px; border-radius:12px; width:100%; max-width: 400px; outline: none; cursor: pointer;">
-                        <option value="">Grup Seçin...</option>
-                    </select>
+                    <div class="custom-dropdown" id="spamReportGroupDropdown" style="max-width: 400px;">
+                        <button type="button" class="dropdown-trigger" id="spamReportDropdownTrigger" onclick="toggleSpamDropdown()">
+                            <span class="dropdown-text" id="spamReportGroupDropdownText">Grup Seçin...</span>
+                            <i class="fas fa-chevron-down dropdown-arrow"></i>
+                        </button>
+                        <div class="dropdown-menu" id="spamReportDropdownMenu">
+                            <input type="text" class="dropdown-search" placeholder="Grup ara..." onkeyup="filterSpamDropdown(this.value)">
+                            <div class="dropdown-options" id="spamReportGroupDropdownOptions">
+                                <!-- Gruplar dinamik yüklenecek -->
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Gizli input: JS seçilen değeri buraya yazacak -->
+                    <input type="hidden" id="spamReportGroupSelect" onchange="loadGroupSpamReport()">
                 </div>
 
                 <div class="loading" id="spamReportLoading" style="display: none;">
