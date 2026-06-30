@@ -306,6 +306,7 @@ body.page-transitioning-out {
 .settings-section,
 .spam-report-section,
 .audit-section {
+    position: relative;
     background: var(--card);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
@@ -1146,10 +1147,13 @@ body.page-transitioning-out {
 .section-body:not(.collapsed) {
     overflow: visible !important;
 }
-#spamReportSection {
-    position: relative;
-    z-index: 10080 !important;
-}
+#addTokenSection { z-index: 105 !important; }
+#exemptionsSection { z-index: 104 !important; }
+#globalExemptionSection { z-index: 103 !important; }
+#automationSection { z-index: 102 !important; }
+#spamReportSection { z-index: 101 !important; }
+#auditSection { z-index: 100 !important; }
+#tokensListSection { z-index: 99 !important; }
 
 /* Premium Spam Table Styles */
 .spam-table-container {
