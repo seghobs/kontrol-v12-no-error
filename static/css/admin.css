@@ -1008,6 +1008,11 @@ body.page-transitioning-out {
 .custom-dropdown {
     position: relative;
     width: 100%;
+    z-index: 10;
+}
+.custom-dropdown:has(.dropdown-trigger.active),
+.custom-dropdown:has(.dropdown-menu.show) {
+    z-index: 10100 !important;
 }
 .custom-dropdown.small {
     width: 120px;
