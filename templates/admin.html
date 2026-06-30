@@ -286,6 +286,12 @@
                     <input type="hidden" id="spamReportGroupSelect" onchange="loadGroupSpamReport()">
                 </div>
 
+                <!-- Member Search Input (Initially Hidden) -->
+                <div id="spamReportMemberSearchWrapper" style="display: none; margin-bottom: 20px; max-width: 400px;">
+                    <label style="color:rgba(255,255,255,0.8); font-size:13px; display:block; margin-bottom:8px;"><i class="fas fa-search me-1"></i> Üye Ara (Kullanıcı Adı):</label>
+                    <input type="text" id="spamReportMemberSearch" placeholder="Kullanıcı adı yazın..." onkeyup="filterSpamReportTable(this.value)" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 14px; border-radius: 12px; width: 100%; outline: none; box-sizing: border-box;">
+                </div>
+
                 <div class="loading" id="spamReportLoading" style="display: none;">
                     <i class="fas fa-spinner fa-spin"></i>
                     <p style="margin-top: 5px;">Rapor hazırlanıyor, lütfen bekleyin...</p>

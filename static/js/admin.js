@@ -1694,8 +1694,13 @@ async function loadGroupSpamReport() {
     const wrapper = document.getElementById("spamReportTableWrapper");
     const tbody = document.getElementById("spamReportTableBody");
     const emptyMsg = document.getElementById("spamReportEmptyMsg");
+    const searchWrapper = document.getElementById("spamReportMemberSearchWrapper");
+    const searchInput = document.getElementById("spamReportMemberSearch");
     
     if (!select || !loading || !wrapper || !tbody || !emptyMsg) return;
+    
+    if (searchWrapper) searchWrapper.style.display = "none";
+    if (searchInput) searchInput.value = "";
     
     const threadId = select.value;
     if (!threadId) {
@@ -1742,6 +1747,7 @@ async function loadGroupSpamReport() {
                 tbody.appendChild(tr);
             });
             wrapper.style.display = "block";
+            if (searchWrapper) searchWrapper.style.display = "block";
         } else {
             emptyMsg.style.display = "block";
         }
@@ -1751,6 +1757,23 @@ async function loadGroupSpamReport() {
     }
 }
 window.loadGroupSpamReport = loadGroupSpamReport;
+
+function filterSpamReportTable(query) {
+    const val = query.toLowerCase().trim();
+    const rows = document.querySelectorAll("#spamReportTableBody tr");
+    rows.forEach(row => {
+        const userLink = row.querySelector("td[data-label='Kullanıcı Adı'] a");
+        if (userLink) {
+            const username = userLink.textContent.toLowerCase().replace("@", "").trim();
+            if (username.includes(val)) {
+                row.style.display = "";
+            } else {
+                row.style.display = "none";
+            }
+        }
+    });
+}
+window.filterSpamReportTable = filterSpamReportTable;
 
 async function showUserSpamDetails(username) {
     const select = document.getElementById("spamReportGroupSelect");
