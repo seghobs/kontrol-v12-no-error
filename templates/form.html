@@ -37,6 +37,9 @@
                     }
                 }
             }
+            if (init === undefined) {
+                return originalFetch(input);
+            }
             return originalFetch(input, init);
         };
     </script>
