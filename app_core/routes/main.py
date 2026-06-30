@@ -134,6 +134,7 @@ def index():
         user_comments_map = {}  # {username: [comment_text1, comment_text2, ...]}
         grup_uye = request.form.get("grup_uye", "")
         grup_uye_kullanicilar = {normalize_username(u) for u in grup_uye.split() if u.strip()}
+        thread_id = request.form.get("thread_id", "").strip()
         link_results = []
         
         # Token'i once al ve tum linklerde ayni tokeni kullan
