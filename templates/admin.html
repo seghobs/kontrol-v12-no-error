@@ -57,13 +57,13 @@
         
         <div id="alertContainer"></div>
         
-        <div class="add-token-section" id="addTokenSection" onclick="toggleAddTokenPanel()">
-            <div class="section-header" id="addTokenHeader">
+        <div class="add-token-section" id="addTokenSection">
+            <div class="section-header" id="addTokenHeader" onclick="toggleAddTokenPanel()" style="cursor: pointer;">
                 <h2><i class="fas fa-plus-circle"></i> Yeni Token Ekle</h2>
                 <i class="fas fa-chevron-down chevron-icon" id="addTokenChevron"></i>
             </div>
 
-            <div id="addTokenBody" class="section-body collapsed" onclick="event.stopPropagation()">
+            <div id="addTokenBody" class="section-body collapsed">
                 <p style="color: rgba(255, 255, 255, 0.7); font-size: 14px; margin-bottom: 15px;">
                     <i class="fas fa-info-circle"></i> Token girildiğinde hangi hesaba ait olduğu otomatik algılanacaktır.
                 </p>
@@ -104,13 +104,13 @@
             </div>
         </div>
 
-        <div class="exemptions-section" id="exemptionsSection" onclick="toggleExemptionsPanel()">
-            <div class="section-header" id="exemptionsHeader">
+        <div class="exemptions-section" id="exemptionsSection">
+            <div class="section-header" id="exemptionsHeader" onclick="toggleExemptionsPanel()" style="cursor: pointer;">
                 <h2><i class="fas fa-user-check"></i> İzinli Kullanıcı Yönetimi</h2>
                 <i class="fas fa-chevron-down chevron-icon" id="exemptionsChevron"></i>
             </div>
 
-            <div id="exemptionsSectionBody" class="section-body collapsed" onclick="event.stopPropagation()">
+            <div id="exemptionsSectionBody" class="section-body collapsed">
                 <p style="color: rgba(255, 255, 255, 0.7); font-size: 14px; margin-bottom: 15px;">
                     Paylaşım linkine özel izinli kullanıcıları buradan görüntüleyebilir, ekleyebilir ve kaldırabilirsiniz.
                 </p>
@@ -324,24 +324,24 @@
             </div>
         </div>
 
-        <div class="audit-section" id="auditSection" onclick="toggleAuditPanel()" style="cursor: pointer;">
-            <div class="section-header" id="auditHeader">
+        <div class="audit-section" id="auditSection">
+            <div class="section-header" id="auditHeader" onclick="toggleAuditPanel()" style="cursor: pointer;">
                 <h2><i class="fas fa-history"></i> Son İşlemler (Audit Log)</h2>
                 <i class="fas fa-chevron-down chevron-icon" id="auditChevron"></i>
             </div>
-            <div id="auditBody" class="section-body collapsed" onclick="event.stopPropagation()">
+            <div id="auditBody" class="section-body collapsed">
                 <div class="loading" id="auditLoading"><i class="fas fa-spinner"></i><p>Yükleniyor...</p></div>
                 <div id="auditList" style="max-height: 400px; overflow-y: auto;"></div>
             </div>
         </div>
         
-        <div class="tokens-list" id="tokensListSection" onclick="toggleTokensListPanel()">
-            <div class="section-header" id="tokensListHeader">
+        <div class="tokens-list" id="tokensListSection">
+            <div class="section-header" id="tokensListHeader" onclick="toggleTokensListPanel()" style="cursor: pointer;">
                 <h2><i class="fas fa-list"></i> Token Listesi</h2>
                 <i class="fas fa-chevron-down chevron-icon" id="tokensListChevron"></i>
             </div>
 
-            <div id="tokensListBody" class="section-body collapsed" onclick="event.stopPropagation()">
+            <div id="tokensListBody" class="section-body collapsed">
                 <div class="tokens-toolbar" style="margin-top: 10px; margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
                     <input type="text" id="tokenSearch" placeholder="Kullanici adi veya ad ara..." style="max-width: 220px; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(196, 149, 106, 0.2); background: rgba(196, 149, 106, 0.05); color: var(--foreground); box-sizing: border-box; height: 38px; margin: 0; outline: none;">
                     <select id="tokenPageSize" style="padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(196, 149, 106, 0.2); background: rgba(196, 149, 106, 0.05); color: var(--foreground); box-sizing: border-box; height: 38px; margin: 0; outline: none;">
