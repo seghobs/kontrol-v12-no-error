@@ -4,9 +4,7 @@ import random
 import time
 import datetime
 import pytz
-
-from flask import Blueprint, jsonify, render_template, request
-
+from flask import Blueprint, jsonify, render_template, request, session, redirect, url_for
 from donustur import donustur
 from log_in import giris_yap, LoginError
 
@@ -108,9 +106,24 @@ def clean_word_count(text):
     return len(words)
 
 
-@main_bp.route("/result")
+@main_bp.route("/result", methods=["GET"])
 def result_page():
-    return render_template("form.html")
+    result = session.get("last_result")
+    if not result:
+        return redirect("/")
+        
+    return render_template(
+        "result.html",
+        links=result.get("links"),
+        all_commented=result.get("all_commented"),
+        group=result.get("group"),
+        user_missing_posts=result.get("user_missing_posts"),
+        duplicate_comment_users=result.get("duplicate_comment_users"),
+        invalid_comment_users=result.get("invalid_comment_users"),
+        user_comments=result.get("user_comments"),
+        thread_id=result.get("thread_id"),
+        check_likes=result.get("check_likes", False)
+    )
 
 
 @main_bp.route("/", methods=["GET", "POST"])
@@ -337,7 +350,6 @@ def index():
                 action="kontrol_yapildi",
                 details=f"Saat {now_str} - {kontrol_tipi} Kontrolü: {grup_sayisi} üyeden {eksik_sayisi} eksik tespit edildi."
             )
-
         # Sonuçları veritabanında cache'le (grup id'si varsa)
         thread_id = request.form.get("thread_id", "").strip()
         if thread_id:
@@ -355,16 +367,19 @@ def index():
             from app_core.storage import set_cached_run_result
             set_cached_run_result(thread_id, today_str, cache_data)
 
-        return render_template("result.html", 
-            links=link_results,
-            all_commented=list(tamamlayanlar_genel),
-            group=list(grup_uye_kullanicilar),
-            user_missing_posts=user_missing_formatted,
-            duplicate_comment_users=list(duplicate_comment_users),
-            invalid_comment_users=list(invalid_comment_users),
-            user_comments=user_comments_map,
-            thread_id=thread_id,
-            check_likes=check_likes)
+        session["last_result"] = {
+            "links": link_results,
+            "all_commented": list(tamamlayanlar_genel),
+            "group": list(grup_uye_kullanicilar),
+            "user_missing_posts": user_missing_formatted,
+            "duplicate_comment_users": list(duplicate_comment_users),
+            "invalid_comment_users": list(invalid_comment_users),
+            "user_comments": user_comments_map,
+            "thread_id": thread_id,
+            "check_likes": check_likes
+        }
+        session.modified = True
+        return redirect(url_for("main.result_page"))
 
     refresh = request.args.get("refresh") == "1"
     link_param = request.args.get("link", "")
