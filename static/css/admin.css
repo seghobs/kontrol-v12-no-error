@@ -1145,3 +1145,49 @@ body.page-transitioning-out {
     z-index: 10080 !important;
 }
 
+/* Responsive Spam Table to Card Layout on Mobile */
+@media (max-width: 768px) {
+    #spamReportTableWrapper table, 
+    #spamReportTableWrapper thead, 
+    #spamReportTableWrapper tbody, 
+    #spamReportTableWrapper th, 
+    #spamReportTableWrapper td, 
+    #spamReportTableWrapper tr {
+        display: block;
+        width: 100%;
+    }
+    #spamReportTableWrapper thead {
+        display: none !important;
+    }
+    #spamReportTableWrapper tr {
+        margin-bottom: 12px;
+        padding: 12px 16px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05) !important;
+        border-radius: 12px;
+        box-sizing: border-box;
+    }
+    #spamReportTableWrapper td {
+        text-align: right !important;
+        padding: 8px 0 !important;
+        border: none !important;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.03) !important;
+    }
+    #spamReportTableWrapper td:last-child {
+        border-bottom: none !important;
+    }
+    #spamReportTableWrapper td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--accent-caramel);
+        float: left;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+}
+
