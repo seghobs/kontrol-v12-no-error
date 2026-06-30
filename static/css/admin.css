@@ -1145,13 +1145,9 @@ body.page-transitioning-out {
 .section-body:not(.collapsed) {
     overflow: visible !important;
 }
-#addTokenSection { z-index: 105 !important; }
-#exemptionsSection { z-index: 104 !important; }
-#globalExemptionSection { z-index: 103 !important; }
-#automationSection { z-index: 102 !important; }
-#spamReportSection { z-index: 101 !important; }
-#auditSection { z-index: 100 !important; }
-#tokensListSection { z-index: 99 !important; }
+#spamReportSection.active-dropdown {
+    z-index: 10100 !important;
+}
 
 /* Premium Spam Table Styles */
 .spam-table-container {

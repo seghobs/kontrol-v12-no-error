@@ -1599,6 +1599,7 @@ function toggleSpamReportPanel() {
 window.toggleSpamReportPanel = toggleSpamReportPanel;
 
 function toggleSpamDropdown() {
+    const section = document.getElementById("spamReportSection");
     const dropdown = document.getElementById("spamReportGroupDropdown");
     const menu = document.getElementById("spamReportDropdownMenu");
     const trigger = document.getElementById("spamReportDropdownTrigger");
@@ -1607,6 +1608,9 @@ function toggleSpamDropdown() {
         trigger.classList.toggle("active");
         if (dropdown) {
             dropdown.classList.toggle("active");
+        }
+        if (section) {
+            section.classList.toggle("active-dropdown");
         }
     }
 }
@@ -1627,6 +1631,7 @@ function filterSpamDropdown(val) {
 window.filterSpamDropdown = filterSpamDropdown;
 
 function selectSpamGroup(id, name) {
+    const section = document.getElementById("spamReportSection");
     const dropdown = document.getElementById("spamReportGroupDropdown");
     const input = document.getElementById("spamReportGroupSelect");
     const textSpan = document.getElementById("spamReportGroupDropdownText");
@@ -1652,6 +1657,9 @@ function selectSpamGroup(id, name) {
         if (dropdown) {
             dropdown.classList.remove("active");
         }
+        if (section) {
+            section.classList.remove("active-dropdown");
+        }
         
         // Trigger onchange event
         input.dispatchEvent(new Event("change"));
@@ -1661,6 +1669,7 @@ window.selectSpamGroup = selectSpamGroup;
 
 // Close dropdown on click outside
 document.addEventListener("click", (e) => {
+    const section = document.getElementById("spamReportSection");
     const dropdown = document.getElementById("spamReportGroupDropdown");
     if (dropdown && !dropdown.contains(e.target)) {
         const menu = document.getElementById("spamReportDropdownMenu");
@@ -1668,6 +1677,9 @@ document.addEventListener("click", (e) => {
         if (menu) menu.classList.remove("show");
         if (trigger) trigger.classList.remove("active");
         dropdown.classList.remove("active");
+        if (section) {
+            section.classList.remove("active-dropdown");
+        }
     }
 });
 
