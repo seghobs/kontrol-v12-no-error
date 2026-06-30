@@ -14,7 +14,7 @@ def donustur(link_gir):
         return numeric_id
 
     link = str(link_gir or "").strip()
-    match = re.search(r"https://www\.instagram\.com/(?:p|reel)/([^/]+)/?", link)
+    match = re.search(r"instagram\.com/(?:p|reel|tv)/([a-zA-Z0-9\-_]+)", link)
 
     if not match:
         logger.warning("Gecersiz Instagram linki: %s", link)

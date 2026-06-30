@@ -149,56 +149,32 @@ def get_post_details(media_id, token_record):
     
     try:
         response = _get_http_session(username).get(
-            f"https://i.instagram.com/api/v1/media/{media_id}/info/",
+            f"https://i.instagram.com/api/v1/media/{media_id}/stream_comments/",
             headers=headers,
             timeout=10,
         )
-        _update_session_from_response(username, response)
         if response.status_code == 200:
-            data = response.json()
-            items = data.get("items", [])
-            if items:
-                item = items[0]
-                user = item.get("user", {})
-                res["sender"] = user.get("username", "")
-                res["owner_fullname"] = user.get("full_name", "")
-                res["like_count"] = item.get("like_count", 0)
-                res["comment_count"] = item.get("comment_count", 0)
-                
-                caption_obj = item.get("caption") or {}
-                res["caption"] = caption_obj.get("text", "")
-                return res
+            for line in response.text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    if "comment_count" in data:
+                        res["comment_count"] = data.get("comment_count", 0)
+                    caption = data.get("caption")
+                    if caption:
+                        user = caption.get("user", {})
+                        res["sender"] = user.get("username")
+                        res["owner_fullname"] = user.get("full_name")
+                        res["caption"] = caption.get("text", "")
+                        return res
+                except Exception:
+                    continue
     except Exception as e:
-        logger.warning("get_post_details info hatası: %s", e)
-        
-    # Infos alternate endpoint
-    try:
-        response = _get_http_session(username).get(
-            f"https://i.instagram.com/api/v1/media/infos/",
-            params={"media_ids": f"[{media_id}]"},
-            headers=headers,
-            timeout=10,
-        )
-        _update_session_from_response(username, response)
-        if response.status_code == 200:
-            data = response.json()
-            items = data.get("items", [])
-            if items:
-                item = items[0]
-                user = item.get("user", {})
-                res["sender"] = user.get("username", "")
-                res["owner_fullname"] = user.get("full_name", "")
-                res["like_count"] = item.get("like_count", 0)
-                res["comment_count"] = item.get("comment_count", 0)
-                
-                caption_obj = item.get("caption") or {}
-                res["caption"] = caption_obj.get("text", "")
-                return res
-    except Exception as e:
-        logger.warning("get_post_details infos hatası: %s", e)
+        logger.warning("get_post_details stream_comments hatası: %s", e)
         
     return res
-
 
 
 def extract_user_id_from_token(token):
@@ -206,10 +182,10 @@ def extract_user_id_from_token(token):
         return None
     try:
         token_data = token.replace("Bearer IGT:2:", "")
-        # Padding ekle
         missing_padding = len(token_data) % 4
         if missing_padding:
             token_data += "=" * (4 - missing_padding)
+        import base64
         decoded = base64.b64decode(token_data)
         data = json.loads(decoded)
         return str(data.get("ds_user_id") or data.get("user_id") or "")

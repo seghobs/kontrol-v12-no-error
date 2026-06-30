@@ -1902,7 +1902,7 @@ async function showAuditPostDetails(postLink) {
             const details = data.details;
             document.getElementById("auditModalPostOwner").textContent = details.sender ? "@" + details.sender : "Bilinmiyor";
             document.getElementById("auditModalPostOwnerFullname").textContent = details.owner_fullname ? details.owner_fullname : "İsim Bilgisi Yok";
-            document.getElementById("auditModalPostLikes").textContent = Number(details.like_count || 0).toLocaleString("tr-TR");
+            document.getElementById("auditModalPostLikes").textContent = details.like_count ? Number(details.like_count).toLocaleString("tr-TR") : "-";
             document.getElementById("auditModalPostComments").textContent = Number(details.comment_count || 0).toLocaleString("tr-TR");
             document.getElementById("auditModalPostCaption").textContent = details.caption ? details.caption : "Açıklama bulunmuyor.";
             document.getElementById("auditModalPostLinkBtn").href = postLink;
@@ -1919,6 +1919,7 @@ async function showAuditPostDetails(postLink) {
         closeAuditPostDetailsModal();
     }
 }
+
 
 function closeAuditPostDetailsModal() {
     const modal = document.getElementById("auditPostDetailsModal");
