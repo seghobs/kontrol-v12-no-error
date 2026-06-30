@@ -5,6 +5,8 @@ let pendingPostLink = null;
 
 function slideDown(el) {
     if (!el) return;
+    if (el._timer) clearTimeout(el._timer);
+    
     el.classList.remove("collapsed");
     el.style.maxHeight = "0px";
     el.style.opacity = "0";
@@ -12,33 +14,29 @@ function slideDown(el) {
     el.style.maxHeight = el.scrollHeight + "px";
     el.style.opacity = "1";
     
-    const onTransitionEnd = (e) => {
-        if (e.propertyName === "max-height") {
-            el.style.maxHeight = "none";
-            el.style.opacity = "";
-            el.removeEventListener("transitionend", onTransitionEnd);
-        }
-    };
-    el.addEventListener("transitionend", onTransitionEnd);
+    el._timer = setTimeout(() => {
+        el.style.maxHeight = "none";
+        el.style.opacity = "";
+        el._timer = null;
+    }, 400);
 }
 
 function slideUp(el) {
     if (!el) return;
+    if (el._timer) clearTimeout(el._timer);
+    
     el.style.maxHeight = el.scrollHeight + "px";
     el.style.opacity = "1";
     void el.offsetHeight; // force reflow
     el.style.maxHeight = "0px";
     el.style.opacity = "0";
     
-    const onTransitionEnd = (e) => {
-        if (e.propertyName === "max-height") {
-            el.classList.add("collapsed");
-            el.style.maxHeight = "";
-            el.style.opacity = "";
-            el.removeEventListener("transitionend", onTransitionEnd);
-        }
-    };
-    el.addEventListener("transitionend", onTransitionEnd);
+    el._timer = setTimeout(() => {
+        el.classList.add("collapsed");
+        el.style.maxHeight = "";
+        el.style.opacity = "";
+        el._timer = null;
+    }, 400);
 }
 
 function updateEksiklerCount(index) {
