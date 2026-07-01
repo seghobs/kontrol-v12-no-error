@@ -1,12 +1,6 @@
-
 function showTokenErrorModal(message) {
-    const modal = document.getElementById("tokenErrorModal");
-    if (modal) {
-        document.getElementById("tokenErrorText").textContent = message;
-        modal.classList.add("show");
-    }
+    showValidationToast(message);
 }
-
 // Global variables for Tag System
 let editingUserIndex = -1;
 
