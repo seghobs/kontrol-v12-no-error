@@ -57,14 +57,16 @@ def get_exempted_users(post_link):
     post_link_decoded = html.unescape(post_link)
     raw_usernames = exemptions.get(post_link_decoded, [])
     return {normalize_username(u) for u in raw_usernames}
-
-
 def normalize_username(username):
     if not username:
         return ""
-    username = username.strip().lower()
+    import unicodedata
+    username = username.strip().replace("İ", "i").replace("I", "i").replace("ı", "i")
+    username = username.lower()
+    username = unicodedata.normalize("NFKD", username)
+    username = "".join([c for c in username if not unicodedata.combining(c)])
+    username = username.replace("ğ", "g").replace("ü", "u").replace("ş", "s").replace("ö", "o").replace("ç", "c")
     return username.lstrip("@")
-
 
 def get_global_exempted_users():
     exemptions = load_global_exemptions()
@@ -213,6 +215,8 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes)
                 continue
                 
             all_result = fetch_likers_with_failover(media_id, token_record=working_token)
+            if isinstance(all_result, dict) and all_result.get("rate_limited"):
+                raise ValueError("Cok fazla istek; Instagram gecici olarak sinir koydu. Lutfen bir sure bekleyin.")
             commenters_normalized = {normalize_username(u) for u in (all_result if isinstance(all_result, set) else all_result.get("usernames", set()))}
         else:
             all_result = fetch_comments_with_failover(media_id, token_record=working_token)
