@@ -147,12 +147,38 @@ def get_post_details(media_id, token_record):
         "accept-language": "tr-TR, en-US",
     })
     
+    # 1. Önce /media/{id}/info/ ile çekmeyi dene (Beğeni sayısı, yorum sayısı ve göndericiyi tek adımda al)
+    try:
+        response = _get_http_session(username).get(
+            f"https://i.instagram.com/api/v1/media/{media_id}/info/",
+            headers=headers,
+            timeout=10,
+        )
+        _update_session_from_response(username, response)
+        if response.status_code == 200:
+            data = response.json()
+            items = data.get("items", [])
+            if items:
+                item = items[0]
+                user = item.get("user", {})
+                res["sender"] = user.get("username")
+                res["owner_fullname"] = user.get("full_name")
+                res["like_count"] = item.get("like_count", 0)
+                res["comment_count"] = item.get("comment_count", 0)
+                caption = item.get("caption") or {}
+                res["caption"] = caption.get("text", "")
+                return res
+    except Exception as e:
+        logger.warning("get_post_details info hatası: %s", e)
+        
+    # 2. Alternatif: stream_comments/ ile çekmeyi dene (Yorum sayısı, göndericiyi al)
     try:
         response = _get_http_session(username).get(
             f"https://i.instagram.com/api/v1/media/{media_id}/stream_comments/",
             headers=headers,
             timeout=10,
         )
+        _update_session_from_response(username, response)
         if response.status_code == 200:
             for line in response.text.splitlines():
                 line = line.strip()
@@ -427,11 +453,12 @@ def fetch_liker_usernames(media_id, token_record, progress_callback=None):
             timeout=15,
         )
         _update_session_from_response(username, response)
+
+        if response.status_code == 429 or (response.status_code == 400 and "feedback_required" in response.text):
+            return {"ok": False, "status": response.status_code, "rate_limited": True, "usernames": usernames}
+
         if response.status_code in [401, 403]:
             return {"ok": False, "status": response.status_code, "usernames": usernames}
-
-        if response.status_code == 429:
-            return {"ok": False, "status": 429, "rate_limited": True, "usernames": usernames}
 
         if response.status_code != 200:
             return {"ok": False, "status": response.status_code, "usernames": usernames}
