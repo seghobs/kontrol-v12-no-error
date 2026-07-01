@@ -213,17 +213,12 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes)
                     "error": f"Bu gönderi 90'dan fazla beğeni aldığı için ({like_count} beğeni) kontrol edilmedi."
                 })
                 continue
-                
+
+        if check_likes:
             all_result = fetch_likers_with_failover(media_id, token_record=working_token)
-            if isinstance(all_result, dict) and all_result.get("rate_limited"):
-                raise ValueError("Cok fazla istek; Instagram gecici olarak sinir koydu. Lutfen bir sure bekleyin.")
             commenters_normalized = {normalize_username(u) for u in (all_result if isinstance(all_result, set) else all_result.get("usernames", set()))}
         else:
             all_result = fetch_comments_with_failover(media_id, token_record=working_token)
-            
-            if isinstance(all_result, dict) and all_result.get("rate_limited"):
-                raise ValueError("Cok fazla istek; Instagram gecici olarak sinir koydu. Lutfen bir sure bekleyin.")
-            
             comments_list = all_result if isinstance(all_result, list) else all_result.get("comments", [])
             from app_core.nlp_scorer import calculate_comment_spam_score
             from app_core.storage import save_comment_log
