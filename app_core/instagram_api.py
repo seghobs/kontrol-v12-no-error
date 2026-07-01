@@ -638,9 +638,9 @@ def fetch_group_media(token_record, thread_id, target_date=None):
     max_ts = int(target_end.timestamp() * 1000000)
     min_ts = int(target_start.timestamp() * 1000000)
     
+    t_data = None
+    thread_users_map = {}
     try:
-        # Ekstra: Gruptaki kullanicilari onceden alalim ki, post atani isimle eslestirebilelim
-        thread_users_map = {}
         try:
             t_resp = _get_http_session(username).get(
                 f"https://i.instagram.com/api/v1/direct_v2/threads/{thread_id}/",
@@ -753,8 +753,65 @@ def fetch_group_media(token_record, thread_id, target_date=None):
                 "comments_disabled": comments_disabled,
                 "taken_at": taken_at,
                 "is_recent": is_recent,
-                "media_type": "video" if media.get("media_type") == 2 else "image",
             })
+        
+        # Parse links from text messages in the thread (to catch plain text link shares)
+        if t_data:
+            text_posts = []
+            try:
+                items = t_data.get("thread", {}).get("items", [])
+                for item in items:
+                    timestamp = item.get("timestamp", 0)
+                    if timestamp < min_ts or timestamp > max_ts:
+                        continue
+                    
+                    sender_pk = str(item.get("user_id", ""))
+                    sender_username = thread_users_map.get(sender_pk, "unknown")
+                    
+                    text = item.get("text", "") or ""
+                    if item.get("link"):
+                        text += " " + str(item.get("link", {}).get("text", ""))
+                        
+                    import re
+                    matches = re.findall(r"instagram\.com/(?:p|reel|tv)/([a-zA-Z0-9\-_]+)", text)
+                    for code in matches:
+                        text_posts.append({
+                            "code": code,
+                            "sender_username": sender_username,
+                            "timestamp": timestamp
+                        })
+            except Exception as e:
+                logger.warning("Thread items parsing error: %s", e)
+                
+            seen_codes = {p["code"] for p in posts}
+            for tp in text_posts:
+                code = tp["code"]
+                if code not in seen_codes:
+                    seen_codes.add(code)
+                    
+                    from donustur import donustur
+                    dummy_link = f"https://www.instagram.com/p/{code}"
+                    media_id = str(donustur(dummy_link) or "")
+                    
+                    timestamp = tp["timestamp"]
+                    timestamp_sec = int(timestamp / 1000000)
+                    dt_utc = datetime.datetime.utcfromtimestamp(timestamp_sec)
+                    dt_utc = utc.localize(dt_utc)
+                    dt = dt_utc.astimezone(gmt3)
+                    
+                    posts.append({
+                        "id": media_id,
+                        "code": code,
+                        "url": f"https://www.instagram.com/p/{code}/",
+                        "date": f"{dt.day} {turkish_months[dt.month]} {dt.strftime('%H:%M')} (Yüklendi)",
+                        "username": tp["sender_username"],
+                        "like_count": -1,
+                        "comment_count": -1,
+                        "comments_disabled": False,
+                        "taken_at": timestamp_sec,
+                        "is_recent": True,
+                        "media_type": "image",
+                    })
         
         return {"ok": True, "posts": posts}
     except Exception as e:

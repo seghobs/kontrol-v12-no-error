@@ -106,24 +106,318 @@ def clean_word_count(text):
     return len(words)
 
 
+def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes):
+    active_working_token = get_working_active_token()
+    if not active_working_token:
+        raise ValueError("Tum hesaplar cikis yapmis gorunuyor. Lutfen admin panelden gecerli bir token girin.")
+
+    grup_uye_kullanicilar = {normalize_username(u) for u in grup_uye.split() if u.strip()}
+    
+    links_raw = link.split("\n")
+    all_commented = set()
+    user_missing_posts = {}  # {username: [post_link1, post_link2, ...]}
+    user_comments_map = {}  # {username: [comment_text1, comment_text2, ...]}
+    link_results = []
+    
+    working_token = get_working_active_token(skip_validation=True)
+    if not working_token:
+        raise ValueError("Aktif token bulunamadi veya tum tokenler expired. Lutfen admin panelden yeni token ekleyin.")
+    
+    post_senders = {}
+    for ps in post_senders_raw:
+        if "|" in ps:
+            url, sender = ps.rsplit("|", 1)
+            url = url.strip().rstrip('/')  # Remove trailing slash for matching
+            post_senders[url] = normalize_username(sender)
+    
+    link_count = 0
+    for link_raw in links_raw:
+        link_single = link_raw.strip().rstrip('/')
+        if not link_single:
+            continue
+        
+        # Her link arasinda random bekleme (insan davranisi)
+        if link_count > 0:
+            delay = round(random.uniform(4.0, 9.0) + random.random(), 2)
+            if delay > 10.0:
+                delay = round(delay - 1.0, 2)
+            logger.info(f"Bekleme: {delay} saniye...")
+            time.sleep(delay)
+        
+        link_count += 1
+        
+        media_id = donustur(link_single)
+        if media_id is None:
+            link_results.append({
+                "post_link": link_single,
+                "eksikler": list(grup_uye_kullanicilar),
+                "commenters": [],
+                "error": "Gecersiz link"
+            })
+            continue
+
+        # Yüklenme tarihini ve göndericiyi kontrol et
+        taken_at, sender = get_media_taken_at(media_id, working_token)
+        if taken_at:
+            gmt3 = pytz.timezone('Europe/Istanbul')
+            today_date = datetime.datetime.now(gmt3).date()
+            yesterday_date = today_date - datetime.timedelta(days=1)
+            
+            dt_taken = datetime.datetime.utcfromtimestamp(taken_at)
+            dt_taken = pytz.utc.localize(dt_taken).astimezone(gmt3)
+            
+            if dt_taken.date() not in (today_date, yesterday_date):
+                link_results.append({
+                    "post_link": link_single,
+                    "sender": sender,
+                    "eksikler": [],
+                    "commenters": [],
+                    "error": "Bu gönderi çok eski (yalnızca dün veya bugün yüklenen gönderiler denetlenebilir)."
+                })
+                continue
+        else:
+            logger.warning("Post yuklenme tarihi alinamadi: %s", link_single)
+        # Post detaylarını API'den çek (Beğeni, Yorum sayısı, Gönderen adı vb.)
+        post_details = get_post_details(media_id, working_token) or {}
+        
+        post_sender = post_senders.get(link_single)
+        if not post_sender:
+            post_sender = post_details.get("sender")
+            if post_sender:
+                post_sender = normalize_username(post_sender)
+                
+        # Get global + per-post exemptions
+        global_exempted = get_global_exempted_users()
+        izinli_uyeler = get_exempted_users(link_single)
+        all_exempted_for_link = izinli_uyeler | global_exempted
+        if post_sender:
+            all_exempted_for_link.add(post_sender)
+
+        commenters_normalized = set()
+        
+        if check_likes:
+            like_count = post_details.get("like_count", 0)
+            if like_count > 90:
+                logger.info(f"Post {link_single} has {like_count} likes (> 90). Skipping check.")
+                link_results.append({
+                    "post_link": link_single,
+                    "eksikler": [],
+                    "commenters": [],
+                    "sender": post_sender,
+                    "owner_fullname": post_details.get("owner_fullname"),
+                    "like_count": like_count,
+                    "comment_count": post_details.get("comment_count", 0),
+                    "caption": post_details.get("caption", ""),
+                    "error": f"Bu gönderi 90'dan fazla beğeni aldığı için ({like_count} beğeni) kontrol edilmedi."
+                })
+                continue
+                
+            all_result = fetch_likers_with_failover(media_id, token_record=working_token)
+            commenters_normalized = {normalize_username(u) for u in (all_result if isinstance(all_result, set) else all_result.get("usernames", set()))}
+        else:
+            all_result = fetch_comments_with_failover(media_id, token_record=working_token)
+            
+            if isinstance(all_result, dict) and all_result.get("rate_limited"):
+                raise ValueError("Cok fazla istek; Instagram gecici olarak sinir koydu. Lutfen bir sure bekleyin.")
+            
+            comments_list = all_result if isinstance(all_result, list) else all_result.get("comments", [])
+            from app_core.nlp_scorer import calculate_comment_spam_score
+            from app_core.storage import save_comment_log
+            import re
+            
+            match = re.search(r"https://www\.instagram\.com/(?:p|reel)/([^/]+)/?", link_single)
+            post_code = match.group(1) if match else "unknown"
+            
+            for uname, text in comments_list:
+                norm_uname = normalize_username(uname)
+                commenters_normalized.add(norm_uname)
+                if norm_uname not in user_comments_map:
+                    user_comments_map[norm_uname] = []
+                user_comments_map[norm_uname].append(text)
+                
+                if norm_uname in grup_uye_kullanicilar and thread_id:
+                    is_valid = 1 if (has_emoji(text) and clean_word_count(text) >= 2) else 0
+                    spam_score = calculate_comment_spam_score(norm_uname, text)
+                    save_comment_log(thread_id, norm_uname, post_code, text, spam_score, is_valid)
+        
+        all_commented.update(commenters_normalized)
+        
+        eksikler = grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized
+        logger.info(f"DEBUG: grup_uye={grup_uye_kullanicilar}, exempted={all_exempted_for_link}, commenters={commenters_normalized}, eksikler={eksikler}")
+        tamamlayanlar = grup_uye_kullanicilar - all_exempted_for_link - eksikler
+        
+        link_results.append({
+            "post_link": link_single,
+            "eksikler": list(eksikler),
+            "commenters": list(tamamlayanlar),
+            "sender": post_sender,
+            "owner_fullname": post_details.get("owner_fullname"),
+            "like_count": post_details.get("like_count", 0),
+            "comment_count": post_details.get("comment_count", 0),
+            "caption": post_details.get("caption", ""),
+        })
+        
+        # Her eksik kullanıcının hangi linklerde eksik olduğunu kaydet
+        for eksik in eksikler:
+            if eksik not in user_missing_posts:
+                user_missing_posts[eksik] = []
+            user_missing_posts[eksik].append(link_single)
+    
+    if not link_results:
+        raise ValueError("Gecerli link bulunamadi.")
+
+    # Kopya yorum tespiti
+    duplicate_comment_users = set()
+    for user, comments in user_comments_map.items():
+        if len(comments) > 1:
+            seen = set()
+            for c in comments:
+                if not c: continue
+                c_clean = c.strip().lower()
+                if c_clean in seen:
+                    duplicate_comment_users.add(user)
+                    break
+                seen.add(c_clean)
+
+    # Yorum formatı/kuralı kontrolü (en az 2 kelime + emoji)
+    invalid_comment_users = set()
+    for user, comments in user_comments_map.items():
+        has_any_valid = False
+        for comment in comments:
+            if has_emoji(comment) and clean_word_count(comment) >= 2:
+                has_any_valid = True
+                break
+        if not has_any_valid:
+            invalid_comment_users.add(user)
+
+    # Collect all exempted users from all links + global exemptions
+    global_exempted = get_global_exempted_users()
+    all_exempted = global_exempted.copy()
+    eksikler_all = set()
+    for lr in link_results:
+        all_exempted.update(get_exempted_users(lr["post_link"]))
+        eksikler_all.update(lr.get("eksikler", []))
+    
+    tamamlayanlar_genel = grup_uye_kullanicilar - all_exempted - eksikler_all
+    
+    user_missing_formatted = {user: posts for user, posts in user_missing_posts.items()}
+    
+    # Audit log
+    tz = pytz.timezone('Europe/Istanbul')
+    now_dt = datetime.datetime.now(tz)
+    now_str = now_dt.strftime('%H:%M:%S')
+    for lr in link_results:
+        post_link = lr["post_link"]
+        eksik_sayisi = len(lr.get("eksikler", []))
+        grup_sayisi = len(grup_uye_kullanicilar)
+        kontrol_tipi = "Beğeni" if check_likes else "Yorum"
+        add_audit_log(
+            entity_type="manuel_kontrol",
+            entity_id=post_link,
+            action="kontrol_yapildi",
+            details=f"Saat {now_str} - {kontrol_tipi} Kontrolü: {grup_sayisi} üyeden {eksik_sayisi} eksik tespit edildi."
+        )
+
+    # Cache run result in DB if thread_id
+    if thread_id:
+        today_str = now_dt.strftime('%Y-%m-%d')
+        cache_data = {
+            "links": link_results,
+            "all_commented": list(tamamlayanlar_genel),
+            "group": list(grup_uye_kullanicilar),
+            "user_missing_posts": user_missing_formatted,
+            "duplicate_comment_users": list(duplicate_comment_users),
+            "invalid_comment_users": list(invalid_comment_users),
+            "user_comments": user_comments_map,
+            "check_likes": check_likes
+        }
+        from app_core.storage import set_cached_run_result
+        set_cached_run_result(thread_id, today_str, cache_data)
+
+    return {
+        "links": link_results,
+        "all_commented": list(tamamlayanlar_genel),
+        "group": list(grup_uye_kullanicilar),
+        "user_missing_posts": user_missing_formatted,
+        "duplicate_comment_users": list(duplicate_comment_users),
+        "invalid_comment_users": list(invalid_comment_users),
+        "user_comments": user_comments_map,
+        "thread_id": thread_id,
+        "check_likes": check_likes
+    }
+
+
 @main_bp.route("/result", methods=["GET"])
 def result_page():
-    result = session.get("last_result")
-    if not result:
+    # Eğer taze yönlendirmeyse, önbellekten göster (Sayfa yüklenmesi hızlı olsun)
+    if session.get("is_fresh_redirect") == True:
+        session["is_fresh_redirect"] = False
+        session.modified = True
+        result = session.get("last_result")
+        if result:
+            return render_template(
+                "result.html",
+                links=result.get("links"),
+                all_commented=result.get("all_commented"),
+                group=result.get("group"),
+                user_missing_posts=result.get("user_missing_posts"),
+                duplicate_comment_users=result.get("duplicate_comment_users"),
+                invalid_comment_users=result.get("invalid_comment_users"),
+                user_comments=result.get("user_comments"),
+                thread_id=result.get("thread_id"),
+                check_likes=result.get("check_likes", False)
+            )
+
+    # Eğer taze yönlendirme DEĞİLSE (kullanıcı F5 yapıp yenilediyse veya Chrome'u kapatıp açtıysa):
+    # İşlemi yeni baştan çalıştır!
+    inputs = session.get("last_inputs")
+    if not inputs:
         return redirect("/")
         
-    return render_template(
-        "result.html",
-        links=result.get("links"),
-        all_commented=result.get("all_commented"),
-        group=result.get("group"),
-        user_missing_posts=result.get("user_missing_posts"),
-        duplicate_comment_users=result.get("duplicate_comment_users"),
-        invalid_comment_users=result.get("invalid_comment_users"),
-        user_comments=result.get("user_comments"),
-        thread_id=result.get("thread_id"),
-        check_likes=result.get("check_likes", False)
-    )
+    try:
+        # Sorguyu yeni baştan çalıştır!
+        res_data = run_manual_control(
+            link=inputs.get("link"),
+            grup_uye=inputs.get("grup_uye"),
+            thread_id=inputs.get("thread_id"),
+            post_senders_raw=inputs.get("post_senders_raw", []),
+            check_likes=inputs.get("check_likes", False)
+        )
+        # Yeni sonuçları hafızaya kaydet
+        session["last_result"] = res_data
+        session.modified = True
+        
+        return render_template(
+            "result.html",
+            links=res_data.get("links"),
+            all_commented=res_data.get("all_commented"),
+            group=res_data.get("group"),
+            user_missing_posts=res_data.get("user_missing_posts"),
+            duplicate_comment_users=res_data.get("duplicate_comment_users"),
+            invalid_comment_users=res_data.get("invalid_comment_users"),
+            user_comments=res_data.get("user_comments"),
+            thread_id=res_data.get("thread_id"),
+            check_likes=res_data.get("check_likes", False)
+        )
+    except Exception as e:
+        logger.exception("Yenileme sırasındaki manuel kontrol hatasi")
+        # Hata durumunda son başarılı sonucu göstermeyi dene
+        result = session.get("last_result")
+        if result:
+            return render_template(
+                "result.html",
+                links=result.get("links"),
+                all_commented=result.get("all_commented"),
+                group=result.get("group"),
+                user_missing_posts=result.get("user_missing_posts"),
+                duplicate_comment_users=result.get("duplicate_comment_users"),
+                invalid_comment_users=result.get("invalid_comment_users"),
+                user_comments=result.get("user_comments"),
+                thread_id=result.get("thread_id"),
+                check_likes=result.get("check_likes", False),
+                error_message=f"Güncelleme sırasında hata oluştu, eski veriler gösteriliyor: {e}"
+            )
+        return redirect("/")
 
 
 @main_bp.route("/", methods=["GET", "POST"])
@@ -140,244 +434,30 @@ def index():
         if not link:
             return render_template("form.html", token_error_message="Paylasim linki zorunludur.")
 
-        # Birden fazla link desteği
-        links_raw = link.split("\n")
-        all_commented = set()
-        user_missing_posts = {}  # {username: [post_link1, post_link2, ...]}
-        user_comments_map = {}  # {username: [comment_text1, comment_text2, ...]}
         grup_uye = request.form.get("grup_uye", "")
-        grup_uye_kullanicilar = {normalize_username(u) for u in grup_uye.split() if u.strip()}
         thread_id = request.form.get("thread_id", "").strip()
-        link_results = []
-        
-        # Token'i once al ve tum linklerde ayni tokeni kullan
-        working_token = get_working_active_token(skip_validation=True)
-        if not working_token:
-            return render_template(
-                "form.html",
-                token_error_message="Aktif token bulunamadi veya tum tokenler expired. Lutfen admin panelden yeni token ekleyin.",
-            )
-        
-        # post_senders: "url|sender" formatında
         post_senders_raw = request.form.getlist("post_senders")
         check_likes = request.form.get("check_likes") == "on"
-        post_senders = {}
-        for ps in post_senders_raw:
-            if "|" in ps:
-                url, sender = ps.rsplit("|", 1)
-                url = url.strip().rstrip('/')  # Remove trailing slash for matching
-                post_senders[url] = normalize_username(sender)
-        logger.info(f"DEBUG: post_senders parsed: {post_senders}")
-        
-        link_count = 0
-        for link_raw in links_raw:
-            link_single = link_raw.strip().rstrip('/')
-            if not link_single:
-                continue
-            
-            # Her link arasinda random bekleme (insan davranisi)
-            if link_count > 0:
-                delay = round(random.uniform(4.0, 9.0) + random.random(), 2)
-                if delay > 10.0:
-                    delay = round(delay - 1.0, 2)
-                logger.info(f"Bekleme: {delay} saniye...")
-                time.sleep(delay)
-            
-            link_count += 1
-            
-            media_id = donustur(link_single)
-            if media_id is None:
-                link_results.append({
-                    "post_link": link_single,
-                    "eksikler": list(grup_uye_kullanicilar),
-                    "commenters": [],
-                    "error": "Gecersiz link"
-                })
-                continue
 
-            # Yüklenme tarihini ve göndericiyi kontrol et
-            taken_at, sender = get_media_taken_at(media_id, working_token)
-            if taken_at:
-                gmt3 = pytz.timezone('Europe/Istanbul')
-                today_date = datetime.datetime.now(gmt3).date()
-                yesterday_date = today_date - datetime.timedelta(days=1)
-                
-                dt_taken = datetime.datetime.utcfromtimestamp(taken_at)
-                dt_taken = pytz.utc.localize(dt_taken).astimezone(gmt3)
-                
-                if dt_taken.date() not in (today_date, yesterday_date):
-                    link_results.append({
-                        "post_link": link_single,
-                        "sender": sender,
-                        "eksikler": [],
-                        "commenters": [],
-                        "error": "Bu gönderi çok eski (yalnızca dün veya bugün yüklenen gönderiler denetlenebilir)."
-                    })
-                    continue
-            else:
-                logger.warning("Post yuklenme tarihi alinamadi: %s", link_single)
+        try:
+            # Kontrolü POST'tayken ilk kez çalıştır
+            res_data = run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes)
+        except ValueError as ve:
+            return render_template("form.html", token_error_message=str(ve))
+        except Exception as e:
+            logger.exception("Manuel kontrol hatasi")
+            return render_template("form.html", token_error_message=f"Kontrol sırasında beklenmedik hata: {e}")
 
-            if check_likes:
-                all_result = fetch_likers_with_failover(media_id, token_record=working_token)
-            else:
-                all_result = fetch_comments_with_failover(media_id, token_record=working_token)
-            
-            if isinstance(all_result, dict) and all_result.get("rate_limited"):
-                return render_template(
-                    "form.html",
-                    token_error_message="Cok fazla istek; Instagram gecici olarak sinir koydu. Lutfen bir sure bekleyin.",
-                )
-            
-            # Likers result is a set of usernames, Comments result is a list of tuples (username, text)
-            if check_likes:
-                commenters_normalized = {normalize_username(u) for u in (all_result if isinstance(all_result, set) else all_result.get("usernames", set()))}
-            else:
-                comments_list = all_result if isinstance(all_result, list) else all_result.get("comments", [])
-                commenters_normalized = set()
-                from app_core.nlp_scorer import calculate_comment_spam_score
-                from app_core.storage import save_comment_log
-                import re
-                
-                match = re.search(r"https://www\.instagram\.com/(?:p|reel)/([^/]+)/?", link_single)
-                post_code = match.group(1) if match else "unknown"
-                
-                for uname, text in comments_list:
-                    norm_uname = normalize_username(uname)
-                    commenters_normalized.add(norm_uname)
-                    if norm_uname not in user_comments_map:
-                        user_comments_map[norm_uname] = []
-                    user_comments_map[norm_uname].append(text)
-                    
-                    if norm_uname in grup_uye_kullanicilar and thread_id:
-                        is_valid = 1 if (has_emoji(text) and clean_word_count(text) >= 2) else 0
-                        spam_score = calculate_comment_spam_score(norm_uname, text)
-                        save_comment_log(thread_id, norm_uname, post_code, text, spam_score, is_valid)
-            
-            all_commented.update(commenters_normalized)
-            
-            # Get global + per-post exemptions
-            global_exempted = get_global_exempted_users()
-            izinli_uyeler = get_exempted_users(link_single)
-            all_exempted_for_link = izinli_uyeler | global_exempted
-            
-            # Post detaylarını API'den çek (Beğeni, Yorum sayısı, Gönderen adı vb.)
-            post_details = get_post_details(media_id, active_working_token) or {}
-            
-            post_sender = post_senders.get(link_single)
-            if not post_sender:
-                post_sender = post_details.get("sender")
-                if post_sender:
-                    post_sender = normalize_username(post_sender)
-            
-            if post_sender:
-                all_exempted_for_link.add(post_sender)
-            
-            eksikler = grup_uye_kullanicilar - all_exempted_for_link - commenters_normalized
-            logger.info(f"DEBUG: grup_uye={grup_uye_kullanicilar}, exempted={all_exempted_for_link}, commenters={commenters_normalized}, eksikler={eksikler}")
-            tamamlayanlar = grup_uye_kullanicilar - all_exempted_for_link - eksikler
-            
-            link_results.append({
-                "post_link": link_single,
-                "eksikler": list(eksikler),
-                "commenters": list(tamamlayanlar),
-                "sender": post_sender,
-                "owner_fullname": post_details.get("owner_fullname"),
-                "like_count": post_details.get("like_count", 0),
-                "comment_count": post_details.get("comment_count", 0),
-                "caption": post_details.get("caption", ""),
-            })
-            
-            # Her eksik kullanıcının hangi linklerde eksik olduğunu kaydet
-            for eksik in eksikler:
-                if eksik not in user_missing_posts:
-                    user_missing_posts[eksik] = []
-                user_missing_posts[eksik].append(link_single)
-        
-        if not link_results:
-            return render_template("form.html", token_error_message="Gecerli link bulunamadi.")
-
-        # Kopya yorum tespiti
-        duplicate_comment_users = set()
-        for user, comments in user_comments_map.items():
-            if len(comments) > 1:
-                # Eger ayni yorum metni birden fazla kez kullanilmissa
-                seen = set()
-                for c in comments:
-                    if not c: continue
-                    c_clean = c.strip().lower()
-                    if c_clean in seen:
-                        duplicate_comment_users.add(user)
-                        break
-                    seen.add(c_clean)
-
-        # Yorum formatı/kuralı kontrolü (en az 2 kelime + emoji)
-        invalid_comment_users = set()
-        for user, comments in user_comments_map.items():
-            has_any_valid = False
-            for comment in comments:
-                if has_emoji(comment) and clean_word_count(comment) >= 2:
-                    has_any_valid = True
-                    break
-            if not has_any_valid:
-                invalid_comment_users.add(user)
-
-        # Collect all exempted users from all links + global exemptions
-        global_exempted = get_global_exempted_users()
-        all_exempted = global_exempted.copy()
-        eksikler_all = set()
-        for lr in link_results:
-            all_exempted.update(get_exempted_users(lr["post_link"]))
-            eksikler_all.update(lr.get("eksikler", []))
-        
-        # tamamlayanlar_genel = people who have commented on any of the links
-        tamamlayanlar_genel = grup_uye_kullanicilar - all_exempted - eksikler_all
-        
-        # Format user_missing_posts for template
-        user_missing_formatted = {user: posts for user, posts in user_missing_posts.items()}
-        
-        # Son işlemlere (audit log) manual kontrolü ekle
-        tz = pytz.timezone('Europe/Istanbul')
-        now_dt = datetime.datetime.now(tz)
-        now_str = now_dt.strftime('%H:%M:%S')
-        for lr in link_results:
-            post_link = lr["post_link"]
-            eksik_sayisi = len(lr.get("eksikler", []))
-            grup_sayisi = len(grup_uye_kullanicilar)
-            kontrol_tipi = "Beğeni" if check_likes else "Yorum"
-            add_audit_log(
-                entity_type="manuel_kontrol",
-                entity_id=post_link,
-                action="kontrol_yapildi",
-                details=f"Saat {now_str} - {kontrol_tipi} Kontrolü: {grup_sayisi} üyeden {eksik_sayisi} eksik tespit edildi."
-            )
-        # Sonuçları veritabanında cache'le (grup id'si varsa)
-        thread_id = request.form.get("thread_id", "").strip()
-        if thread_id:
-            today_str = now_dt.strftime('%Y-%m-%d')
-            cache_data = {
-                "links": link_results,
-                "all_commented": list(tamamlayanlar_genel),
-                "group": list(grup_uye_kullanicilar),
-                "user_missing_posts": user_missing_formatted,
-                "duplicate_comment_users": list(duplicate_comment_users),
-                "invalid_comment_users": list(invalid_comment_users),
-                "user_comments": user_comments_map,
-                "check_likes": check_likes
-            }
-            from app_core.storage import set_cached_run_result
-            set_cached_run_result(thread_id, today_str, cache_data)
-
-        session["last_result"] = {
-            "links": link_results,
-            "all_commented": list(tamamlayanlar_genel),
-            "group": list(grup_uye_kullanicilar),
-            "user_missing_posts": user_missing_formatted,
-            "duplicate_comment_users": list(duplicate_comment_users),
-            "invalid_comment_users": list(invalid_comment_users),
-            "user_comments": user_comments_map,
+        # Kaydet ve yönlendir
+        session["last_inputs"] = {
+            "link": link,
+            "grup_uye": grup_uye,
             "thread_id": thread_id,
+            "post_senders_raw": post_senders_raw,
             "check_likes": check_likes
         }
+        session["last_result"] = res_data
+        session["is_fresh_redirect"] = True
         session.modified = True
         return redirect(url_for("main.result_page"))
 
