@@ -24,7 +24,6 @@ def _json_read(path, default):
     except Exception:
         return default
 
-
 def _init_db(conn):
     conn.execute(
         """
@@ -41,10 +40,16 @@ def _init_db(conn):
             logout_reason TEXT DEFAULT '',
             logout_time TEXT DEFAULT '',
             deleted_at TEXT DEFAULT '',
-            relogin_attempts INTEGER DEFAULT 0
+            relogin_attempts INTEGER DEFAULT 0,
+            last_relogin_failed_at TEXT DEFAULT ''
         )
         """
     )
+    try:
+        conn.execute("ALTER TABLE tokens ADD COLUMN last_relogin_failed_at TEXT DEFAULT ''")
+    except Exception:
+        pass
+
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS exemptions (
@@ -195,8 +200,9 @@ def upsert_token(token, conn=None):
             """
             INSERT INTO tokens (
                 username, full_name, password, token, android_id_yeni, user_agent,
-                device_id, is_active, added_at, logout_reason, logout_time, deleted_at, relogin_attempts
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                device_id, is_active, added_at, logout_reason, logout_time, deleted_at, relogin_attempts,
+                last_relogin_failed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(username) DO UPDATE SET
                 full_name=excluded.full_name,
                 password=excluded.password,
@@ -209,7 +215,8 @@ def upsert_token(token, conn=None):
                 logout_reason=excluded.logout_reason,
                 logout_time=excluded.logout_time,
                 deleted_at=excluded.deleted_at,
-                relogin_attempts=excluded.relogin_attempts
+                relogin_attempts=excluded.relogin_attempts,
+                last_relogin_failed_at=excluded.last_relogin_failed_at
             """,
             (
                 token.get("username", ""),
@@ -225,8 +232,10 @@ def upsert_token(token, conn=None):
                 token.get("logout_time", ""),
                 token.get("deleted_at", ""),
                 token.get("relogin_attempts", 0),
+                token.get("last_relogin_failed_at", ""),
             ),
         )
+
         if own_conn:
             conn.commit()
         return True

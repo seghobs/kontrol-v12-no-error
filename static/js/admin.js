@@ -749,10 +749,42 @@ function createTokenCard(token) {
         showAlert(`@${token.username} için token başarıyla dışarı aktarıldı.`, "success");
     });
     actionsDiv.appendChild(exportBtn);
+    const lastFail = token.last_relogin_failed_at;
+    let isCooldown = false;
+    let remaining = 0;
+    if (lastFail) {
+        const lastFailTs = parseFloat(lastFail);
+        const nowTs = Date.now() / 1000;
+        const elapsed = nowTs - lastFailTs;
+        if (elapsed < 180) {
+            isCooldown = true;
+            remaining = Math.ceil(180 - elapsed);
+        }
+    }
 
     const reloginBtn = document.createElement("button");
     reloginBtn.className = "btn";
-    reloginBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Tekrar Giris Yap';
+    if (isCooldown) {
+        reloginBtn.disabled = true;
+        reloginBtn.style.opacity = "0.5";
+        reloginBtn.style.cursor = "not-allowed";
+        reloginBtn.innerHTML = `<i class="fas fa-hourglass-half"></i> Bekleyin (${remaining}s)`;
+        
+        const timerId = setInterval(() => {
+            remaining--;
+            if (remaining <= 0) {
+                clearInterval(timerId);
+                reloginBtn.disabled = false;
+                reloginBtn.style.opacity = "";
+                reloginBtn.style.cursor = "";
+                reloginBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Tekrar Giris Yap';
+            } else {
+                reloginBtn.innerHTML = `<i class="fas fa-hourglass-half"></i> Bekleyin (${remaining}s)`;
+            }
+        }, 1000);
+    } else {
+        reloginBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Tekrar Giris Yap';
+    }
     reloginBtn.addEventListener("click", () => reloginToken(token.username));
     actionsDiv.appendChild(reloginBtn);
 
@@ -955,11 +987,20 @@ async function reloginToken(username, overrides) {
             loadTokens();
             return;
         }
+        if (data.code === "COOLDOWN_ACTIVE") {
+            closeReloginFieldsModal();
+            showResultModal("cooldown", "Giriş Engellendi (3 Dakika)", data.message);
+            loadTokens();
+            return;
+        }
         if (data.code === "FIELDS_REQUIRED" && data.missing && data.missing.length > 0) {
             openReloginFieldsModal(username, data.missing);
             return;
         }
-        showAlert(data.message, "error");
+        closeReloginFieldsModal();
+        showResultModal("warning", "Giriş Başarısız", "Giriş işlemi başarısız oldu. Hesap doğrulamaya (SMS, e-posta veya şüpheli hareket bildirimine) düşmüş olabilir. Lütfen telefonunuzdan Instagram uygulamasını açarak bu durumu kontrol edin ve çözün. 3 dakika boyunca tekrar giriş yapmanıza izin verilmeyecektir.");
+        loadTokens();
+
     } catch (error) {
         showAlert("Bir hata olustu: " + error.message, "error");
     }
@@ -1074,7 +1115,6 @@ document.addEventListener("keydown", (event) => {
 });
 
 let _resultTimer = null;
-
 function showResultModal(type, title, detail) {
     const modal = document.getElementById("successModal");
     const iconEl = document.getElementById("resultIcon");
@@ -1084,14 +1124,28 @@ function showResultModal(type, title, detail) {
     const btnEl = document.getElementById("resultCloseBtn");
 
     const isSuccess = type === "success";
-    const color = isSuccess ? "#2ecc71" : "#e74c3c";
-    const colorAlpha15 = isSuccess ? "rgba(39,174,96,0.15)" : "rgba(231,76,60,0.15)";
-    const colorAlpha40 = isSuccess ? "rgba(39,174,96,0.4)" : "rgba(231,76,60,0.4)";
+    const isWarning = type === "warning" || type === "cooldown";
+    
+    let color = isSuccess ? "#2ecc71" : "#e74c3c";
+    if (isWarning) {
+        color = "#f39c12"; // Orange warning color
+    }
+    
+    const colorAlpha15 = isSuccess ? "rgba(39,174,96,0.15)" : (isWarning ? "rgba(243,156,18,0.15)" : "rgba(231,76,60,0.15)");
+    const colorAlpha40 = isSuccess ? "rgba(39,174,96,0.4)" : (isWarning ? "rgba(243,156,18,0.4)" : "rgba(231,76,60,0.4)");
 
     iconEl.style.background = colorAlpha15;
     iconEl.style.borderColor = colorAlpha40;
     iconInner.style.color = color;
-    iconInner.className = isSuccess ? "fas fa-check" : "fas fa-times";
+    
+    if (isSuccess) {
+        iconInner.className = "fas fa-check";
+    } else if (isWarning) {
+        iconInner.className = "fas fa-exclamation-triangle";
+    } else {
+        iconInner.className = "fas fa-times";
+    }
+    
     titleEl.style.color = color;
     titleEl.textContent = title;
     detailEl.textContent = detail;
@@ -1101,7 +1155,9 @@ function showResultModal(type, title, detail) {
 
     modal.classList.add("show");
     if (_resultTimer) clearTimeout(_resultTimer);
-    _resultTimer = setTimeout(() => closeSuccessModal(), 4000);
+    if (!isWarning) {
+        _resultTimer = setTimeout(() => closeSuccessModal(), 4000);
+    }
 }
 
 function closeSuccessModal() {

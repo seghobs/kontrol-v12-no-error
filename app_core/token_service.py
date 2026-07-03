@@ -298,8 +298,6 @@ def upsert_login_token(username, password, token, android_id, user_agent, device
     save_tokens(tokens)
     logger.info("Token kaydedildi: @%s (eski tokenler pasif yapildi)", username)
 
-
-
 def relogin_saved_user(username, password_override=None, device_id_override=None, user_agent_override=None, android_id_override=None):
     try:
         from app_core.instagram_api import clear_http_session
@@ -318,11 +316,28 @@ def relogin_saved_user(username, password_override=None, device_id_override=None
     if not target:
         return {"ok": False, "code": 404, "message": "Token bulunamadi"}
 
+    # Cooldown kontrolü (DB seviyesinde)
+    last_fail = target.get("last_relogin_failed_at", "")
+    if last_fail:
+        try:
+            last_fail_ts = float(last_fail)
+            now_ts = datetime.now().timestamp()
+            elapsed = now_ts - last_fail_ts
+            if elapsed < 180: # 3 dakika
+                remaining = int(180 - elapsed)
+                return {
+                    "ok": False,
+                    "code": "COOLDOWN_ACTIVE",
+                    "remaining_seconds": remaining,
+                    "message": f"Son giriş denemesi başarısız oldu. Lütfen Instagram mobil uygulamasından doğrulama adımını manuel çözün. Tekrar denemek için {remaining} saniye beklemelisiniz."
+                }
+        except Exception as e:
+            logger.warning("Cooldown parse hatasi: %s", e)
+
     stored_password = str(target.get("password", "")).strip()
     stored_android = str(target.get("android_id_yeni", "")).strip()
     stored_user_agent = str(target.get("user_agent", "")).strip()
     stored_device_id = str(target.get("device_id", "")).strip()
-
 
     password = (password_override or "").strip() or stored_password
     android_id = (android_id_override or "").strip() or stored_android
@@ -353,6 +368,9 @@ def relogin_saved_user(username, password_override=None, device_id_override=None
         )
     except LoginError as error:
         logger.error("Giriş hatası: %s | Tip: %s", error.message, error.error_type)
+        # Giriş başarısız olduğunda cooldown zamanını kaydet (DB'ye yaz)
+        target["last_relogin_failed_at"] = str(datetime.now().timestamp())
+        save_tokens(tokens)
         return {
             "ok": False,
             "code": error.status_code or 400,
@@ -362,6 +380,8 @@ def relogin_saved_user(username, password_override=None, device_id_override=None
         }
 
     if not new_token:
+        target["last_relogin_failed_at"] = str(datetime.now().timestamp())
+        save_tokens(tokens)
         return {"ok": False, "code": 400, "message": "Giris basarisiz - token alinamadi"}
 
     target["token"] = new_token
@@ -371,6 +391,7 @@ def relogin_saved_user(username, password_override=None, device_id_override=None
     target["password"] = password
     target["is_active"] = True
     target["relogin_attempts"] = 0
+    target["last_relogin_failed_at"] = "" # Başarılı girişte temizle
     clear_logout_state(target)
     save_tokens(tokens)
 

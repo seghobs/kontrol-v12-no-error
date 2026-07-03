@@ -336,7 +336,10 @@ def relogin_token():
         code = result.get("code", 400)
         if code == "FIELDS_REQUIRED":
             return api_response(False, "FIELDS_REQUIRED", result.get("message"), extra={"missing": result.get("missing", [])}, http_status=200)
+        if code == "COOLDOWN_ACTIVE":
+            return api_response(False, "COOLDOWN_ACTIVE", result.get("message"), extra={"remaining_seconds": result.get("remaining_seconds")}, http_status=200)
         return api_response(False, "RELOGIN_FAILED", result.get("message"), http_status=code if isinstance(code, int) else 400)
+
     add_audit_log("token", username, "relogin_basarili")
     return api_response(True, "RELOGIN_OK", result.get("message"))
 
