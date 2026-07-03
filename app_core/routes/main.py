@@ -121,10 +121,10 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes)
     user_comments_map = {}  # {username: [comment_text1, comment_text2, ...]}
     link_results = []
     
-    working_token = get_working_active_token(skip_validation=True)
-    if not working_token:
+    initial_token = get_working_active_token(skip_validation=True)
+    if not initial_token:
         raise ValueError("Aktif token bulunamadi veya tum tokenler expired. Lutfen admin panelden yeni token ekleyin.")
-    
+
     post_senders = {}
     for ps in post_senders_raw:
         if "|" in ps:
@@ -145,6 +145,10 @@ def run_manual_control(link, grup_uye, thread_id, post_senders_raw, check_likes)
                 delay = round(delay - 1.0, 2)
             logger.info(f"Bekleme: {delay} saniye...")
             time.sleep(delay)
+        
+        working_token = get_working_active_token(skip_validation=True)
+        if not working_token:
+            raise ValueError("Aktif token bulunamadi veya tum tokenler expired. Lutfen admin panelden yeni token ekleyin.")
         
         link_count += 1
         
