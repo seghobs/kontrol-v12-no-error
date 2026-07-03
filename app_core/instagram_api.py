@@ -253,7 +253,6 @@ def build_auth_headers(token, user_agent, android_id, device_id, username=None):
         
     return headers
 
-
 def _update_session_from_response(username, response):
     """
     Response'dan session state'i gunceller.
@@ -265,22 +264,6 @@ def _update_session_from_response(username, response):
     if not username or not response:
         return
     try:
-        if response.status_code in [400, 401, 403]:
-            # Media info veya likers veya stream_comments isteklerindeki 403 veya 400 hataları (gizli hesap vb.) oturumu silmemelidir!
-            url_str = str(response.url).lower()
-            if "media" in url_str and ("/info" in url_str or "/likers" in url_str or "/stream_comments" in url_str):
-                logger.info("Media istegi basarisiz (HTTP %d) - Oturum temizlenmiyor: @%s", response.status_code, username)
-                return
-                
-            logger.info("Session state ve HTTP session temizleniyor (HTTP %d): @%s", response.status_code, username)
-            clear_http_session(username)
-            try:
-                from app_core.session_state import clear_session
-                clear_session(username)
-            except Exception as e:
-                logger.warning("clear_session hatasi: %s", e)
-            return
-
         from app_core.session_state import update_session, update_session_from_body
         # 1) HTTP response header'lari
         update_session(username, response.headers)
@@ -293,7 +276,6 @@ def _update_session_from_response(username, response):
             pass  # JSON degilse veya parse hatasi varsa sessizce gec
     except Exception as e:
         logger.warning("_update_session_from_response hatası: %s", e)
-
 
 def _get_username(token_record):
     """Token record'dan username'i çıkarır."""
@@ -309,24 +291,78 @@ def fetch_current_user(token, user_agent, android_id, device_id, username=None, 
     )
     return response
 
-
-
 def validate_token(token_record):
-    """
-    Kullanıcının isteği üzerine: Grup listesini çekmeyi dener.
-    Eğer çekebilirse token geçerlidir (True). Çekemezse çıkış yapmıştır (False).
-    """
-    result = fetch_group_threads(token_record)
-    if result.get("ok"):
-        logger.info("Token dogrulandi (grup listesi cekilebildi): %s", token_record.get("username"))
+    username = _get_username(token_record)
+    token = token_record.get("token", "")
+    user_agent = token_record.get("user_agent", "")
+    android_id = token_record.get("android_id_yeni", "")
+    device_id = token_record.get("device_id", "")
+    
+    if not token or not user_agent or not android_id or not device_id:
+        return False
+    
+    user_id = extract_user_id_from_token(token)
+    if not user_id:
         return True
     
-    error_msg = result.get("error", "")
-    if "403" in str(error_msg):
-        error_msg += " (Ya çıkış yapılmış ya da doğrulamaya düşmüş)"
+    # Birincil: GraphQL profile timeline (doğal görünür, inbox kadar sıklıkla kullanılmaz)
+    try:
+        from urllib.parse import quote as _urlquote
+        headers = {
+            "authorization": token,
+            "user-agent": user_agent,
+            "x-ig-app-id": IG_APP_ID,
+            "x-ig-android-id": f"android-{android_id}",
+            "x-ig-device-id": device_id,
+            "x-fb-friendly-name": "IGProfileTimelineQuery",
+            "x-ig-bloks-serialize-payload": "true",
+            "x-ig-validate-null-in-legacy-dict": "true",
+            "content-type": "application/x-www-form-urlencoded",
+        }
+        variables = json.dumps({"user_id": user_id, "count": 1}, separators=(",", ":"))
+        data = (
+            "method=post&pretty=false&format=json&server_timestamps=true"
+            "&locale=user&purpose=refresh"
+            "&fb_api_req_friendly_name=IGProfileTimelineQuery"
+            "&client_doc_id=56030350817877850088506871007"
+            "&enable_canonical_naming=true"
+            f"&variables={_urlquote(variables)}"
+        )
+        response = requests.post(
+            "https://i.instagram.com/graphql/query",
+            headers=headers,
+            data=data,
+            timeout=10,
+        )
+        _update_session_from_response(username, response)
+        if response.status_code == 200:
+            logger.info("Token dogrulandi (graphql): %s", device_id[:8])
+            return True
+        if response.status_code in [401, 403]:
+            logger.warning("Token reddedildi (graphql): %d", response.status_code)
+            return False
+    except Exception as error:
+        logger.warning("Token dogrulama hatasi (graphql): %s", error)
     
-    logger.warning("Token reddedildi (grup listesi cekilemedi): %s", error_msg)
-    return False
+    # Fallback: inbox
+    try:
+        headers = build_auth_headers(token, user_agent, android_id, device_id, username=username)
+        response = requests.get(
+            "https://i.instagram.com/api/v1/direct_v2/inbox/",
+            headers=headers,
+            timeout=10,
+        )
+        _update_session_from_response(username, response)
+        if response.status_code == 200:
+            logger.info("Token dogrulandi (inbox fallback): %s", device_id[:8])
+            return True
+        if response.status_code in [401, 403]:
+            logger.warning("Token reddedildi (inbox fallback): %d", response.status_code)
+            return False
+    except Exception as error:
+        logger.warning("Token dogrulama hatasi (inbox fallback): %s", error)
+    
+    return True
 
 
 def fetch_comment_usernames(media_id, token_record, min_id=None, progress_callback=None):

@@ -258,24 +258,13 @@ def fetch_likers_with_failover(media_id, progress_callback=None, token_record=No
             tried_usernames.add(current_username)
             token_record = get_working_active_token(tried_usernames)
             continue
-
         status_code = result.get("status")
-        if status_code in [400, 401, 403]:
-            from app_core.instagram_api import validate_token
-            is_really_dead = not validate_token(token_record)
-            if is_really_dead:
-                logger.info("Token (@%s) Auth Hatası aldı. Self-healing baslatiliyor...", current_username)
-                healed = handle_invalid_token(current_username, "Token gecersiz veya cikis yapildi (Auth Hatasi)")
-                if healed:
-                    refreshed_tokens = load_tokens()
-                    refreshed_record = next((t for t in refreshed_tokens if t.get("username") == current_username), None)
-                    if refreshed_record and refreshed_record.get("is_active", False):
-                        token_record = refreshed_record
-                        _last_validation_times[current_username] = datetime.now().timestamp()
-                        retry_count += 1
-                        continue
-            else:
-                logger.warning("Token (@%s) aslinda aktif ama begeni listesi engellendi. Pasife alinmadi.", current_username)
+        if status_code in [401, 403]:
+            tokens = load_tokens()
+            deactivate_token(tokens, current_username, "Token gecersiz veya cikis yapildi (Auth Hatasi)")
+            save_tokens(tokens)
+        elif status_code == 400:
+            logger.warning("Token (@%s) begeni listesi icin gecici engel (400) aldi. Token kapatilmiyor.", current_username)
         else:
             logger.warning("Post veya API hatasi (%s). Token yanmadi, ancak islem sonlandiriliyor.", status_code)
             break
