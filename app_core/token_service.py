@@ -41,7 +41,6 @@ def clear_logout_state(token):
     token.pop("logout_reason", None)
     token.pop("logout_time", None)
 
-
 def handle_invalid_token(username, reason):
     tokens = load_tokens()
     target = next((item for item in tokens if item.get("username") == username), None)
@@ -49,55 +48,14 @@ def handle_invalid_token(username, reason):
         logger.warning("Self-healing: @%s bulunamadi.", username)
         return False
 
-    # Eğer token zaten pasifse otomatik giriş denemesi yapılmamalı
-    if not target.get("is_active", False):
-        logger.info("Self-healing: @%s zaten pasif durumda, otomatik giris denemesi atlaniyor.", username)
-        return False
-
-    attempts = target.get("relogin_attempts", 0) or 0
-    if attempts >= 3:
-        target["is_active"] = False
-        target["logout_reason"] = "3 kere login yapmayı denendi fakat hesaba giriş başarısız oldu. Manuel hesabın durumunu kontrol edin."
-        target["logout_time"] = str(datetime.now())
-        save_tokens(tokens)
-        logger.warning("Self-healing: @%s zaten 3 kere basarisiz giris denemesi yapmis. Deneme iptal ediliyor.", username)
-        return False
-
-    attempts += 1
-    target["relogin_attempts"] = attempts
+    # Otomatik giris (relogin) tamamen devre disi birakildi.
+    # Token sadece pasife alinir, kullanici manuel olarak admin panelinden "Tekrar Giris Yap" butonuna basmalidir.
+    target["is_active"] = False
+    target["logout_reason"] = f"{reason} (Manuel giriş bekleniyor)"
+    target["logout_time"] = str(datetime.now())
     save_tokens(tokens)
-
-    stored_password = str(target.get("password", "")).strip()
-    if not stored_password:
-        logger.warning("Self-healing: @%s sifresi veritabaninda saklanmadigi icin otomatik yenilenemedi.", username)
-        target["is_active"] = False
-        target["logout_reason"] = f"{reason} (Şifre bulunamadığı için otomatik giriş yapılamadı)"
-        target["logout_time"] = str(datetime.now())
-        save_tokens(tokens)
-        return False
-
-    logger.info("Self-healing: @%s otomatik giris denemesi yapiliyor (%d/3)...", username, attempts)
-    res = relogin_saved_user(username)
-    if res.get("ok"):
-        tokens = load_tokens()
-        target = next((item for item in tokens if item.get("username") == username), None)
-        if target:
-            target["relogin_attempts"] = 0
-            save_tokens(tokens)
-        logger.info("Self-healing: @%s otomatik giris basarili.", username)
-        return True
-    else:
-        logger.warning("Self-healing: @%s otomatik giris denemesi basarisiz: %s", username, res.get("message", ""))
-        if attempts >= 3:
-            tokens = load_tokens()
-            target = next((item for item in tokens if item.get("username") == username), None)
-            if target:
-                target["is_active"] = False
-                target["logout_reason"] = "3 kere login yapmayı denendi fakat hesaba giriş başarısız oldu. Manuel hesabın durumunu kontrol edin."
-                target["logout_time"] = str(datetime.now())
-                save_tokens(tokens)
-        return False
-
+    logger.info("Self-healing: @%s otomatik giris engellendi ve token pasife alindi. Lutfen admin panelinden manuel tekrar giris yapin.", username)
+    return False
 
 def get_working_active_token(excluded_usernames=None, skip_validation=False):
     if excluded_usernames is None:
